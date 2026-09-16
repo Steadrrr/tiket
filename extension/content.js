@@ -27,6 +27,7 @@
   let staffExitZone = null;
   let reengageBtn = null;
   let currentIframeDoc = null;
+  let pendingDoc = null; // 현재 초기화 시도 중인 iframe 문서(중복 시도 방지용)
   let priceInterval = null;
 
   function isVisible(el) {
@@ -46,18 +47,37 @@
     return null;
   }
 
+  // 발매유형 행을 "절대 컬럼 인덱스"가 아니라 "－/＋ 셀 기준 상대 위치"로 찾는다.
+  // dhtmlx는 숨겨진 컬럼(상품ID 등)도 display:none인 <td>로 실제 DOM에 남겨두므로,
+  // 앞에 숨겨진 컬럼이 몇 개가 오든 이 방식은 영향을 받지 않는다.
+  // 알려진 실제 컬럼 순서: ... GOODS_NM, GOODS_UNPRC, DEC_BTN(－), UNT(숨김), ADD_BTN(＋)
+  //   → dec 기준: price = dec.previousElementSibling, name = price.previousElementSibling
+  //             add  = dec.nextElementSibling.nextElementSibling (사이에 숨겨진 UNT 1칸)
   function findTicketRows(doc) {
-    const rows = Array.from(doc.querySelectorAll('tr'));
-    return rows.filter((tr) => {
-      const cells = tr.children;
-      if (cells.length <= rowCfg.addBtnColIndex) return false;
-      const dec = cells[rowCfg.decBtnColIndex];
-      const add = cells[rowCfg.addBtnColIndex];
-      if (!dec || !add) return false;
-      const decTxt = dec.textContent.trim();
-      const addTxt = add.textContent.trim();
-      return rowCfg.decGlyphs.includes(decTxt) && rowCfg.addGlyphs.includes(addTxt);
+    const candidates = Array.from(doc.querySelectorAll('td, th'));
+    const found = [];
+    const seenRows = new Set();
+
+    candidates.forEach((decCell) => {
+      const decTxt = decCell.textContent.trim();
+      if (!rowCfg.decGlyphs.includes(decTxt)) return;
+
+      const tr = decCell.closest('tr');
+      if (!tr || seenRows.has(tr)) return;
+
+      const priceCell = decCell.previousElementSibling;
+      const nameCell = priceCell && priceCell.previousElementSibling;
+      const addCell = decCell.nextElementSibling && decCell.nextElementSibling.nextElementSibling;
+      if (!priceCell || !nameCell || !addCell) return;
+
+      const addTxt = addCell.textContent.trim();
+      if (!rowCfg.addGlyphs.includes(addTxt)) return;
+
+      seenRows.add(tr);
+      found.push({ tr, nameCell, priceCell, decCell, addCell });
     });
+
+    return found;
   }
 
   function waitForTicketUi(doc, timeoutMs = 15000) {
@@ -80,6 +100,14 @@
 
       setTimeout(() => {
         observer.disconnect();
+        // 어떤 조건이 안 맞았는지 진단할 수 있도록 상세 로그를 남긴다.
+        const decCandidates = Array.from(doc.querySelectorAll('td, th')).filter((el) =>
+          rowCfg.decGlyphs.includes(el.textContent.trim())
+        );
+        console.warn('[키오스크] 진단: 문서 readyState =', doc.readyState);
+        console.warn('[키오스크] 진단: "－" 글자를 가진 셀 개수 =', decCandidates.length);
+        console.warn('[키오스크] 진단: 매칭된 발매유형 행 개수 =', findTicketRows(doc).length);
+        console.warn('[키오스크] 진단: 신용카드 버튼(', sel.payButton, ') 존재 =', !!doc.querySelector(sel.payButton));
         reject(new Error('발매유형 그리드 또는 신용카드 버튼을 찾지 못했습니다.'));
       }, timeoutMs);
     });
@@ -104,14 +132,14 @@
 
     rows
       .filter((row) => {
-        const name = row.children[rowCfg.nameColIndex].textContent.trim();
+        const name = row.nameCell.textContent.trim();
         return !cfg.excludedTypeNames.includes(name);
       })
       .forEach((row) => {
-        const name = row.children[rowCfg.nameColIndex].textContent.trim();
-        const price = row.children[rowCfg.priceColIndex].textContent.trim();
-        const decCell = row.children[rowCfg.decBtnColIndex];
-        const addCell = row.children[rowCfg.addBtnColIndex];
+        const name = row.nameCell.textContent.trim();
+        const price = row.priceCell.textContent.trim();
+        const decCell = row.decCell;
+        const addCell = row.addCell;
 
         const isBulk = cfg.bulkTypeNames.includes(name);
         const maxQty = isBulk ? cfg.bulkMaxQty : cfg.selectors.quantityMax;
@@ -294,13 +322,14 @@
       reengageBtn = null;
     }
     currentIframeDoc = null;
+    pendingDoc = null;
   }
 
   async function tryActivate() {
     const iframe = findActiveTicketIframe();
 
     if (!iframe) {
-      if (overlayRoot || currentIframeDoc) teardownOverlay();
+      if (overlayRoot || currentIframeDoc || pendingDoc) teardownOverlay();
       return;
     }
 
@@ -313,13 +342,16 @@
     if (!doc || doc.readyState === 'loading') return;
 
     if (doc === currentIframeDoc && overlayRoot) return; // 이미 구성됨, 유지
+    if (doc === pendingDoc) return; // 이미 이 문서에 대해 초기화 시도 중
 
     teardownOverlay();
     currentIframeDoc = doc;
+    pendingDoc = doc;
 
     try {
       const { rows, payButtonEl } = await waitForTicketUi(doc);
 
+      if (pendingDoc !== doc) return; // 대기 중 다른 시도로 대체됨
       if (findActiveTicketIframe() !== iframe) return; // 그 사이 탭 전환됨
 
       const totalPriceEl = sel.totalPriceDisplay ? doc.querySelector(sel.totalPriceDisplay) : null;
@@ -328,6 +360,8 @@
     } catch (err) {
       console.error('[키오스크] 초기화 실패:', err.message);
       console.error('[키오스크] config.js의 selectors 값이 실제 페이지와 일치하는지 확인하세요.');
+    } finally {
+      if (pendingDoc === doc) pendingDoc = null;
     }
   }
 

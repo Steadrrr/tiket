@@ -30,17 +30,10 @@ window.KIOSK_CONFIG = {
     // 발매유형은 dhtmlx 그리드의 <tr> 한 줄로 렌더링되며, 실제 확인된 HTML은:
     //   <td>일반</td><td>2,000</td><td><font color="blue">－</font></td>
     //   <td style="display:none">0</td><td><font color="blue">＋</font></td>...
-    // 즉 한 행(<tr>)의 <td> 자식들을 0부터 셀 때:
-    //   2번째(index 2) = 유형명, 3번째(index 3) = 가격,
-    //   5번째(index 4) = "－" 감소 버튼, 7번째(index 6) = "＋" 증가 버튼.
-    // (컬럼 정의: GOODS_ID, UPPER_GOODS_CLSSC_CD, GOODS_NM, GOODS_UNPRC,
-    //  DEC_BTN, UNT, ADD_BTN, ... 순서)
+    // content.js는 절대 컬럼 번호가 아니라 "－/＋ 셀 기준 상대 위치"로 행을
+    // 찾는다 (앞에 숨겨진 컬럼이 몇 개든 상관없이 동작하도록). "－"/"＋" 두
+    // 글자 모두 반각/전각이 섞여 나올 수 있어 둘 다 인정한다.
     ticketRow: {
-      nameColIndex: 2,
-      priceColIndex: 3,
-      decBtnColIndex: 4,
-      addBtnColIndex: 6,
-      // "－"/"＋" 두 글자 모두 반각/전각이 섞여 나올 수 있어 둘 다 인정한다.
       decGlyphs: ['－', '-'],
       addGlyphs: ['＋', '+'],
     },
