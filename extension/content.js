@@ -30,6 +30,7 @@
   let priceInterval = null;
   let kioskConfirmed = false; // 배경 스크립트가 전체화면 적용을 확인해줬는지
   let suppressedIframe = null; // 홈버튼으로 명시적으로 나간 iframe(재진입 억제용)
+  let paymentGuardUntil = 0; // 이 시각(ms) 전까지는 자동 재구성을 하지 않는다
 
   // 크롬은 최근 사용자 입력(클릭/키 입력 등)이 전혀 없는 상태에서는
   // chrome.windows.update(state:'fullscreen') 요청을 조용히 무시할 때가
@@ -168,22 +169,38 @@
     el.dispatchEvent(new MouseEventCtor('click', { bubbles: true, cancelable: true, view: win }));
   }
 
-  // 할부 선택 팝업(fn_selectMonth)은 dhtmlx 폼 버튼(id: PayMonth1~6,
-  // value: 일시불/2개월/.../6개월)으로 렌더링된다. id가 조금 달라져도
-  // 안전하도록, 절대 id가 아니라 버튼에 보이는 값/텍스트가 정확히
-  // "일시불", "2개월" 등과 일치하는지로 찾는다.
+  // 할부 선택 팝업(fn_selectMonth)의 버튼은 실제로는 <input>/<button>이
+  // 아니라 dhtmlx 폼이 그리는 커스텀 클릭 요소였다:
+  //   <div class="dhxform_btn" role="link" tabindex="0">
+  //     <div class="dhxform_btn_txt ...">일시불</div>
+  //     <div class="dhxform_btn_filler" ...></div>
+  //   </div>
+  // id가 조금 달라져도 안전하도록, 절대 id가 아니라 버튼에 보이는
+  // 값/텍스트가 정확히 "일시불", "2개월" 등과 일치하는지로 찾는다.
   const INSTALLMENT_LABELS = ['일시불', '2개월', '3개월', '4개월', '5개월', '6개월'];
 
   function findInstallmentButtons(doc) {
     const found = {};
     const candidates = Array.from(
-      doc.querySelectorAll('input[type="button"], input[type="submit"], button, a')
+      doc.querySelectorAll(
+        'input[type="button"], input[type="submit"], button, a, div.dhxform_btn, [role="link"]'
+      )
     );
     candidates.forEach((el) => {
-      const raw = el.value !== undefined && el.value !== '' ? el.value : el.textContent;
+      const labelEl = el.querySelector && el.querySelector('.dhxform_btn_txt');
+      let raw;
+      if (labelEl) {
+        raw = labelEl.textContent;
+      } else if (el.value !== undefined && el.value !== '') {
+        raw = el.value;
+      } else {
+        raw = el.textContent;
+      }
       const text = (raw || '').trim();
+      // 텍스트만 있고 안쪽에 하위 요소가 더 있는 컨테이너(예: 전체 팝업)까지
+      // 걸리지 않도록, 직접 자식 텍스트가 정확히 일치하는 것만 인정한다.
       if (INSTALLMENT_LABELS.includes(text) && !found[text]) {
-        found[text] = el;
+        found[text] = el; // 클릭은 바깥 요소(el) 자체에 전달 - dhtmlx가 여기에 리스너를 건다
       }
     });
     return found;
@@ -385,6 +402,11 @@
     payBtn.addEventListener('click', () => {
       payBtn.disabled = true;
       payBtn.textContent = '카드결제기 진행 중...';
+      // 결제가 진행되는 동안 실제 페이지 화면이 잠깐씩 바뀔 수 있는데,
+      // 그 타이밍에 우리 쪽 자동 재확인(tryActivate)이 끼어들어 오버레이를
+      // 다시 만들려다 실패하면 오버레이가 통째로 사라질 수 있다. 결제
+      // 진행 중에는 자동 재구성을 잠시 멈춘다.
+      paymentGuardUntil = Date.now() + 60000;
       dispatchClick(payButtonEl, win);
       // 총 결제금액이 일정 금액(보통 5만원) 이상이면 실제 페이지가 할부
       // 개월수를 고르는 내부 팝업(일시불~6개월)을 띄운다. 그 팝업이
@@ -524,6 +546,10 @@
   }
 
   async function tryActivate() {
+    // 결제가 진행 중인 동안에는 자동 재구성을 완전히 멈춘다. 이미 뜬
+    // 오버레이는 그대로 두고, 다른 어떤 판단도 하지 않는다.
+    if (Date.now() < paymentGuardUntil) return;
+
     const iframe = findActiveTicketIframe();
 
     if (!iframe) {

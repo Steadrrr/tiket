@@ -129,6 +129,25 @@ Console 탭에 아래와 같은 진단 로그가 함께 출력됩니다.
 실제 표시 문구가 다르면(예: "2개월" 대신 "2회" 등) 이 배열을 실제 값에
 맞게 수정해야 합니다.
 
+실제로 확인해보니 이 버튼들은 `<input>`/`<button>`이 아니라 dhtmlx 폼이
+그리는 커스텀 클릭 요소였습니다:
+
+```html
+<div class="dhxform_btn" role="link" tabindex="0">
+  <div class="dhxform_btn_txt">일시불</div>
+  <div class="dhxform_btn_filler"></div>
+</div>
+```
+
+`findInstallmentButtons()`는 이 구조(바깥 `div.dhxform_btn` + 안쪽
+`.dhxform_btn_txt`의 텍스트)도 인식하도록 되어 있습니다.
+
+**결제 중 오버레이가 갑자기 사라지는 문제**: 결제가 진행되는 동안 실제
+페이지 화면이 잠깐씩 바뀌는데, 그 타이밍에 자동 재확인 로직이 끼어들어
+오버레이를 다시 만들려다 실패하면 오버레이가 통째로 사라질 수 있었습니다.
+"신용카드 결제"를 누르면 60초간 자동 재구성을 멈추도록 해서, 결제/할부
+선택이 끝날 때까지 오버레이가 유지되도록 했습니다.
+
 ## ⚠️ 남은 확인/조정 사항
 
 - `config.js`의 `homeButton.password` — 초기값은 `1009`입니다. 실제 운영
