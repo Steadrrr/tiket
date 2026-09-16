@@ -206,7 +206,7 @@
     return found;
   }
 
-  function waitForInstallmentButtons(doc, timeoutMs = 6000) {
+  function waitForInstallmentButtons(doc, timeoutMs = 10000) {
     return new Promise((resolve) => {
       function check() {
         const found = findInstallmentButtons(doc);
@@ -225,6 +225,22 @@
 
       setTimeout(() => {
         observer.disconnect();
+        // 할부 팝업을 못 찾았을 때, 애초에 금액 미만이라 안 뜬 것인지
+        // 아니면 팝업은 떴는데 우리 선택자가 못 찾은 것인지 구분할 수
+        // 있도록 진단 로그를 남긴다.
+        const dhxformBtns = Array.from(doc.querySelectorAll('div.dhxform_btn'));
+        console.warn('[키오스크] 할부 팝업 진단: div.dhxform_btn 개수 =', dhxformBtns.length);
+        if (dhxformBtns.length > 0) {
+          console.warn(
+            '[키오스크] 할부 팝업 진단: 찾은 버튼 텍스트들 =',
+            dhxformBtns.map((el) => {
+              const labelEl = el.querySelector('.dhxform_btn_txt');
+              return (labelEl ? labelEl.textContent : el.textContent).trim();
+            })
+          );
+        }
+        const roleLinkEls = Array.from(doc.querySelectorAll('[role="link"]'));
+        console.warn('[키오스크] 할부 팝업 진단: [role="link"] 개수 =', roleLinkEls.length);
         resolve(null); // 할부 팝업 없이 바로 진행된 경우(금액 미만 등)
       }, timeoutMs);
     });
