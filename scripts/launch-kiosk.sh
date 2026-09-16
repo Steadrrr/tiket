@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTENSION_DIR="$SCRIPT_DIR/../extension"
 PROFILE_DIR="$HOME/.kiosk-chrome-profile"
-START_URL="https://REPLACE_WITH_REAL_LOGIN_URL"
+START_URL="https://ioms.foresttrip.go.kr/"
 
 CHROME_BIN="$(command -v google-chrome || command -v chromium-browser || command -v chromium)"
 

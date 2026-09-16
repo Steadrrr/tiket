@@ -4,12 +4,12 @@
   "version": "1.0.0",
   "description": "산림청통합운영관리 발매 페이지를 터치 키오스크용 단순 UI로 감싸는 확장프로그램",
   "host_permissions": [
-    "https://REPLACE_WITH_REAL_DOMAIN/*"
+    "https://ioms.foresttrip.go.kr/*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://REPLACE_WITH_REAL_DOMAIN/*"
+        "https://ioms.foresttrip.go.kr/*"
       ],
       "js": ["config.js", "content.js"],
       "css": ["overlay.css"],

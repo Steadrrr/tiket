@@ -5,11 +5,17 @@
 //  선택자를 뽑아 붙여넣으면 됩니다)
 // ============================================================================
 window.KIOSK_CONFIG = {
-  // 이 정규식과 일치하는 URL(발매 페이지)에서만 키오스크 오버레이가 자동으로 켜집니다.
-  // 로그인 페이지 등 다른 화면에서는 오버레이가 뜨지 않아 직원이 정상적으로
-  // 공인인증서 로그인을 진행할 수 있습니다.
-  // 예: /\/ticket\/issue/  또는  /\/reservation\/onsite/
-  activatePathPattern: /TODO_발매페이지_경로_패턴/,
+  // ioms.foresttrip.go.kr은 로그인 후에도 URL이 "/main/init.do#"로 고정된 채
+  // 좌측 메뉴를 누르면 dhtmlx 탭 안에 iframe으로 화면이 로드되는 구조다.
+  // "입장권판매" 메뉴를 클릭하면 아래 패턴과 일치하는 src를 가진 iframe이
+  // 생성되는데, 이 iframe이 "현재 활성 탭"으로 화면에 보일 때만 오버레이를
+  // 띄운다. (탭을 다른 메뉴로 전환하면 이 iframe은 DOM에 남아있되
+  // visibility:hidden 처리되므로, 그 상태는 활성으로 보지 않는다)
+  //
+  // 실제로 확인된 경로: /rep/sm/sm/sptMngmeSalInsertEN/init.do?openMenuId=REPS0100
+  // 매표소별로 openMenuId 값 등이 다를 수 있으니, 실제 환경에서 다르면 이
+  // 패턴을 조정하세요.
+  ticketFrameSrcPattern: /\/rep\/sm\/sm\/sptMngmeSalInsertEN\//,
 
   selectors: {
     // 발매유형(입장권 종류)들을 감싸는 부모 컨테이너

@@ -5,7 +5,7 @@ REM 실행 전에 아래 URL을 실제 로그인 페이지 주소로 바꿔주�
 set SCRIPT_DIR=%~dp0
 set EXTENSION_DIR=%SCRIPT_DIR%..\extension
 set PROFILE_DIR=%USERPROFILE%\.kiosk-chrome-profile
-set START_URL=https://REPLACE_WITH_REAL_LOGIN_URL
+set START_URL=https://ioms.foresttrip.go.kr/
 
 start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" ^
   --kiosk ^

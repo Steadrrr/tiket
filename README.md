@@ -10,40 +10,59 @@
 
 ## 동작 원리
 
+`ioms.foresttrip.go.kr`은 로그인 후에도 최상위 URL이 `/main/init.do#`으로
+고정된 채, 좌측 메뉴를 누르면 dhtmlx 탭 안에 **iframe**으로 화면이 로드되는
+구조입니다(SPA형 MDI). 예를 들어 "현장발권 > 입장권판매" 메뉴를 누르면
+`/rep/sm/sm/sptMngmeSalInsertEN/init.do?openMenuId=REPS0100` 같은 src를 가진
+iframe이 탭 형태로 열립니다. 그래서 이 확장은:
+
 1. 직원이 아침에 키오스크 PC를 켜면 Chrome이 키오스크 모드(`--kiosk`)로
    실행되며 로그인 페이지가 뜹니다.
 2. 직원이 공인인증서로 평소처럼 수동 로그인합니다. (자동 로그인은 구현하지
    않았습니다 — 인증서 비밀번호를 코드에 저장하지 않기 위함)
-3. 로그인 후 발매 페이지로 이동하면, 확장프로그램의 content script가 해당
-   URL 패턴(`config.js`의 `activatePathPattern`)을 감지하고 실제 화면 위에
-   전체화면 오버레이 UI를 띄웁니다.
-4. 손님은 오버레이의 큰 버튼으로만 유형/수량을 고르고 "신용카드 결제"를
-   누릅니다. 이 클릭은 실제 페이지의 결제 버튼 클릭으로 그대로 전달되어,
-   기존에 연결되어 있던 카드결제기 결제 흐름이 동일하게 진행됩니다.
-5. 관리자가 화면 좌상단 모서리를 짧은 시간 안에 5번 터치하면 비밀번호
-   입력창이 뜨고, 맞으면 오버레이가 사라져 실제 화면(로그아웃, 오류 확인,
-   재로그인 등)을 다시 조작할 수 있습니다.
+3. 확장프로그램은 최상위 문서에서만 동작하며, `config.js`의
+   `ticketFrameSrcPattern`과 일치하면서 **현재 화면에 보이는(visible)**
+   iframe이 나타나는지 계속 감시합니다. (같은 iframe이 다른 탭으로 전환되어
+   숨겨진 채 DOM에 남아있을 수도 있기 때문에 단순히 존재 여부가 아니라
+   보임 여부까지 확인합니다)
+4. 해당 iframe이 활성화되면 그 안에서 발매유형/수량/결제버튼 요소를 찾아,
+   최상위 문서 위에 전체화면 오버레이 UI를 띄웁니다.
+5. 손님은 오버레이의 큰 버튼으로만 유형/수량을 고르고 "신용카드 결제"를
+   누릅니다. 이 클릭은 iframe 내부의 실제 결제 버튼 클릭으로 그대로
+   전달되어, 기존에 연결되어 있던 카드결제기 결제 흐름이 동일하게
+   진행됩니다.
+6. 직원이 다른 메뉴(환불, 매표소변경 등)로 탭을 전환하거나 탭을 닫으면
+   오버레이가 자동으로 사라지고 평소 화면을 그대로 쓸 수 있습니다.
+7. 그 밖에도 관리자가 화면 좌상단 모서리를 짧은 시간 안에 5번 터치하면
+   비밀번호 입력창이 뜨고, 맞으면 오버레이가 즉시 사라집니다(화면
+   우하단의 "키오스크 모드로 복귀" 버튼으로 다시 켤 수 있습니다).
 
 ## ⚠️ 지금 바로 채워야 하는 부분
 
-실제 발매 페이지의 HTML 구조를 모르는 상태로 만든 뼈대(scaffold)입니다.
-아래 파일에서 `TODO` 로 표시된 값을 실제 값으로 바꿔야 동작합니다.
+로그인 후 최상위 화면 구조는 확인했지만, **"입장권판매" iframe 내부의
+실제 발매유형/수량/결제버튼 HTML은 아직 확인 전**입니다. 아래 값을 실제
+값으로 바꿔야 동작합니다.
 
-- `extension/manifest.json`
-  - `host_permissions`, `content_scripts.matches`의 `REPLACE_WITH_REAL_DOMAIN`
 - `extension/config.js`
-  - `activatePathPattern` — 발매 페이지 URL을 구분하는 정규식
+  - `ticketFrameSrcPattern` — 이미 확인된 값(`/rep/sm/sm/sptMngmeSalInsertEN/`)이
+    채워져 있으나, 매표소별로 `openMenuId` 등이 달라 경로가 다르면 조정 필요
   - `selectors.ticketTypeContainer` / `ticketTypeOptionSelector` — 발매유형
-    선택 영역
+    선택 영역 (iframe 내부 기준 선택자)
   - `selectors.quantityInput` — 수량 입력창
   - `selectors.payButton` — "신용카드" 결제 버튼
   - `selectors.quantityMin` / `quantityMax` — 실제 페이지와 동일하게
   - `staffExit.password` — 운영 전 반드시 변경
 - `scripts/launch-kiosk.sh` / `launch-kiosk.bat`
-  - `START_URL` — 로그인 페이지 실제 주소
+  - `START_URL` — 현재는 `https://ioms.foresttrip.go.kr/`로 두었습니다.
+    로그인 후 자동으로 이 주소로 리다이렉트되지 않는다면 실제 로그인
+    페이지 주소로 바꿔주세요.
 
-선택자를 뽑는 가장 쉬운 방법: 실제 발매 페이지에서 해당 요소를 우클릭 →
-"검사(Inspect)" → Elements 패널에서 요소 우클릭 → Copy → **Copy selector**.
+**iframe 내부 선택자를 확인하는 법**: 실제 사이트에 로그인 후 "입장권판매"
+메뉴를 열고, 개발자도구(F12)에서 해당 iframe 안의 발매유형 목록/수량
+입력창/신용카드 버튼 요소를 우클릭 → 검사 → Elements 패널에서 다시
+우클릭 → Copy → **Copy selector**. (iframe 안을 검사할 때는 개발자도구가
+자동으로 그 iframe의 document 컨텍스트로 들어가므로 평소처럼 선택하면
+됩니다)
 
 ## 선택자 채운 뒤 테스트하는 법
 

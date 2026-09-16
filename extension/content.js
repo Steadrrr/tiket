@@ -1,39 +1,64 @@
 // ============================================================================
 // 발매 페이지를 감싸는 키오스크 오버레이
 //
-// 동작 방식:
-// 1) config.js의 activatePathPattern과 현재 URL이 일치할 때만 동작한다.
-// 2) 실제 페이지의 발매유형/수량/결제버튼 요소를 찾을 때까지 기다린다.
-// 3) 화면 전체를 덮는 단순한 터치 UI(오버레이)를 만든다.
-// 4) 오버레이에서의 조작은 항상 "실제 페이지의 요소 값을 바꾸고 진짜 이벤트를
-//    발생시키는" 방식으로 처리한다 (원본 페이지의 로직/세션/보안을 그대로 사용).
-// 5) 실제 페이지는 오버레이 뒤에 그대로 남아있고, 오버레이가 화면을 덮어
-//    직원 전용 탈출 제스처 전까지는 보이지도 눌리지도 않는다.
+// ioms.foresttrip.go.kr은 로그인 후에도 최상위 URL이 "/main/init.do#"로
+// 고정된 채, 좌측 메뉴를 클릭하면 dhtmlx 탭 안에 iframe으로 화면이 로드되는
+// 구조다 (SPA형 MDI). 그래서 이 확장은:
+//
+// 1) 최상위(top) 프레임에서만 동작한다 (manifest에서 all_frames: false).
+// 2) config.js의 ticketFrameSrcPattern과 src가 일치하면서 "현재 화면에
+//    보이는(visible)" iframe을 계속 찾는다. (같은 src의 iframe이 탭
+//    전환으로 숨겨진 채 DOM에 남아있을 수 있기 때문)
+// 3) 그 iframe이 활성 상태가 되면, iframe.contentDocument 안에서 발매유형/
+//    수량/결제버튼 요소를 찾아 최상위 문서 위에 전체화면 오버레이를 만든다.
+// 4) 오버레이의 조작은 항상 iframe 내부의 진짜 요소 값을 바꾸고 진짜
+//    이벤트를 발생시키는 방식으로 처리한다 (로그인 세션/결제 로직은 그대로).
+// 5) 메뉴 탭이 바뀌거나 닫히면(= 발매 화면이 더 이상 보이지 않으면) 오버레이를
+//    자동으로 걷어내서, 다른 업무(환불, 매표소변경 등)는 평소처럼 쓸 수 있다.
 // ============================================================================
 (function () {
   const cfg = window.KIOSK_CONFIG;
   if (!cfg) return;
-
-  if (!cfg.activatePathPattern || !cfg.activatePathPattern.test(location.href)) {
-    // 발매 페이지가 아니면(예: 로그인 화면) 아무것도 하지 않고 실제 화면을 그대로 노출.
-    return;
-  }
+  if (window.top !== window.self) return; // 최상위 문서에서만 실행
 
   const sel = cfg.selectors;
 
-  function waitForElement(selector, timeoutMs = 15000) {
+  let overlayRoot = null;
+  let staffExitZone = null;
+  let reengageBtn = null;
+  let currentIframeDoc = null;
+  let activeTeardown = null;
+
+  function isVisible(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    return style.visibility !== 'hidden' && style.display !== 'none';
+  }
+
+  function findActiveTicketIframe() {
+    const iframes = Array.from(document.querySelectorAll('iframe'));
+    for (const iframe of iframes) {
+      if (!iframe.src || !cfg.ticketFrameSrcPattern.test(iframe.src)) continue;
+      const tabbarCell = iframe.closest('.dhx_cell_tabbar');
+      if (tabbarCell && !isVisible(tabbarCell)) continue;
+      return iframe;
+    }
+    return null;
+  }
+
+  function waitForElementIn(doc, selector, timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
-      const existing = document.querySelector(selector);
+      const existing = doc.querySelector(selector);
       if (existing) return resolve(existing);
 
       const observer = new MutationObserver(() => {
-        const el = document.querySelector(selector);
+        const el = doc.querySelector(selector);
         if (el) {
           observer.disconnect();
           resolve(el);
         }
       });
-      observer.observe(document.documentElement, { childList: true, subtree: true });
+      observer.observe(doc.documentElement, { childList: true, subtree: true });
 
       setTimeout(() => {
         observer.disconnect();
@@ -48,7 +73,7 @@
     });
   }
 
-  function readOptionLabel(optionEl) {
+  function readOptionLabel(doc, optionEl) {
     switch (sel.ticketTypeLabelSource) {
       case 'text':
         return optionEl.textContent.trim();
@@ -57,7 +82,7 @@
       case 'label':
       default: {
         if (optionEl.id) {
-          const labelEl = document.querySelector(`label[for="${CSS.escape(optionEl.id)}"]`);
+          const labelEl = doc.querySelector(`label[for="${CSS.escape(optionEl.id)}"]`);
           if (labelEl) return labelEl.textContent.trim();
         }
         const parentLabel = optionEl.closest('label');
@@ -82,15 +107,15 @@
     }
   }
 
-  function setRealQuantity(inputEl, value) {
+  function setRealQuantity(win, inputEl, value) {
     const clamped = Math.min(sel.quantityMax, Math.max(sel.quantityMin, value));
-    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    const nativeSetter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
     nativeSetter.call(inputEl, String(clamped));
     dispatchRealEvents(inputEl, ['input', 'change']);
     return clamped;
   }
 
-  function buildOverlay(ticketTypeOptions, quantityInputEl, payButtonEl, totalPriceEl) {
+  function buildOverlay(doc, win, ticketTypeOptions, quantityInputEl, payButtonEl, totalPriceEl) {
     const root = document.createElement('div');
     root.id = 'kiosk-overlay-root';
 
@@ -115,7 +140,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'kiosk-type-btn';
-      btn.textContent = readOptionLabel(optionEl);
+      btn.textContent = readOptionLabel(doc, optionEl);
       btn.addEventListener('click', () => {
         selectRealTicketType(optionEl);
         if (selectedButton) selectedButton.classList.remove('selected');
@@ -124,7 +149,6 @@
       });
       typeGrid.appendChild(btn);
       if (idx === 0) {
-        // 기본 선택값을 실제 페이지 상태와 맞춰줌
         btn.classList.add('selected');
         selectedButton = btn;
       }
@@ -160,7 +184,7 @@
     plusBtn.textContent = '＋';
 
     function refreshQty(next) {
-      currentQty = setRealQuantity(quantityInputEl, next);
+      currentQty = setRealQuantity(win, quantityInputEl, next);
       qtyDisplay.textContent = currentQty;
     }
 
@@ -174,16 +198,17 @@
     root.appendChild(qtySection);
 
     // --- 총액 표시(선택) ---
-    let priceDisplay = null;
+    let priceObserver = null;
     if (totalPriceEl) {
-      priceDisplay = document.createElement('div');
+      const priceDisplay = document.createElement('div');
       priceDisplay.className = 'kiosk-price';
       priceDisplay.textContent = totalPriceEl.textContent.trim();
       root.appendChild(priceDisplay);
 
-      new MutationObserver(() => {
+      priceObserver = new MutationObserver(() => {
         priceDisplay.textContent = totalPriceEl.textContent.trim();
-      }).observe(totalPriceEl, { characterData: true, childList: true, subtree: true });
+      });
+      priceObserver.observe(totalPriceEl, { characterData: true, childList: true, subtree: true });
     }
 
     // --- 결제 버튼 ---
@@ -195,7 +220,6 @@
       payBtn.disabled = true;
       payBtn.textContent = '카드결제기 진행 중...';
       payButtonEl.click();
-      // 결제기 처리 중 중복 클릭 방지. 완료/취소 후 다음 손님을 위해 초기화.
       setTimeout(() => {
         payBtn.disabled = false;
         payBtn.textContent = '신용카드 결제';
@@ -204,18 +228,37 @@
     root.appendChild(payBtn);
 
     document.body.appendChild(root);
-    setupStaffExit(root);
+    overlayRoot = root;
+    setupStaffExit();
+
+    return () => {
+      if (priceObserver) priceObserver.disconnect();
+    };
   }
 
-  function setupStaffExit(overlayRoot) {
-    const cornerZone = document.createElement('div');
-    cornerZone.id = 'kiosk-staff-exit-zone';
-    document.body.appendChild(cornerZone);
+  function setupStaffExit() {
+    const zone = document.createElement('div');
+    zone.id = 'kiosk-staff-exit-zone';
+    document.body.appendChild(zone);
+    staffExitZone = zone;
+
+    const btn = document.createElement('button');
+    btn.id = 'kiosk-reengage-btn';
+    btn.type = 'button';
+    btn.textContent = '키오스크 모드로 복귀';
+    btn.style.display = 'none';
+    btn.addEventListener('click', () => {
+      if (overlayRoot) overlayRoot.style.display = '';
+      zone.style.display = '';
+      btn.style.display = 'none';
+    });
+    document.body.appendChild(btn);
+    reengageBtn = btn;
 
     let taps = 0;
     let windowTimer = null;
 
-    cornerZone.addEventListener('click', () => {
+    zone.addEventListener('click', () => {
       taps += 1;
       if (windowTimer) clearTimeout(windowTimer);
       windowTimer = setTimeout(() => {
@@ -226,36 +269,100 @@
         taps = 0;
         const input = window.prompt('직원 비밀번호를 입력하세요');
         if (input === cfg.staffExit.password) {
-          overlayRoot.style.display = 'none';
-          cornerZone.style.display = 'none';
+          if (overlayRoot) overlayRoot.style.display = 'none';
+          zone.style.display = 'none';
+          btn.style.display = '';
         }
       }
     });
   }
 
-  async function init() {
+  function teardownOverlay() {
+    if (activeTeardown) {
+      activeTeardown();
+      activeTeardown = null;
+    }
+    if (overlayRoot) {
+      overlayRoot.remove();
+      overlayRoot = null;
+    }
+    if (staffExitZone) {
+      staffExitZone.remove();
+      staffExitZone = null;
+    }
+    if (reengageBtn) {
+      reengageBtn.remove();
+      reengageBtn = null;
+    }
+    currentIframeDoc = null;
+  }
+
+  async function tryActivate() {
+    const iframe = findActiveTicketIframe();
+
+    if (!iframe) {
+      if (overlayRoot || currentIframeDoc) teardownOverlay();
+      return;
+    }
+
+    let doc;
+    try {
+      doc = iframe.contentDocument;
+    } catch (e) {
+      return; // 접근 불가(다른 오리진 등) - 발생하면 안 되지만 방어적으로 무시
+    }
+    if (!doc || doc.readyState === 'loading') return;
+
+    if (doc === currentIframeDoc && overlayRoot) return; // 이미 구성됨, 유지
+
+    teardownOverlay();
+    currentIframeDoc = doc;
+
     try {
       const [quantityInputEl, payButtonEl] = await Promise.all([
-        waitForElement(sel.quantityInput),
-        waitForElement(sel.payButton),
+        waitForElementIn(doc, sel.quantityInput),
+        waitForElementIn(doc, sel.payButton),
       ]);
-      await waitForElement(sel.ticketTypeContainer);
+      const container = await waitForElementIn(doc, sel.ticketTypeContainer);
 
-      const container = document.querySelector(sel.ticketTypeContainer);
+      // 그 사이 탭이 전환되어 버렸다면 중단
+      if (findActiveTicketIframe() !== iframe) return;
+
       const ticketTypeOptions = Array.from(container.querySelectorAll(sel.ticketTypeOptionSelector));
       if (ticketTypeOptions.length === 0) {
         console.error('[키오스크] 발매유형 항목을 찾지 못했습니다. config.js의 선택자를 확인하세요.');
         return;
       }
 
-      const totalPriceEl = sel.totalPriceDisplay ? document.querySelector(sel.totalPriceDisplay) : null;
+      const totalPriceEl = sel.totalPriceDisplay ? doc.querySelector(sel.totalPriceDisplay) : null;
 
-      buildOverlay(ticketTypeOptions, quantityInputEl, payButtonEl, totalPriceEl);
+      activeTeardown = buildOverlay(
+        doc,
+        iframe.contentWindow,
+        ticketTypeOptions,
+        quantityInputEl,
+        payButtonEl,
+        totalPriceEl
+      );
     } catch (err) {
       console.error('[키오스크] 초기화 실패:', err.message);
       console.error('[키오스크] config.js의 selectors 값이 실제 페이지와 일치하는지 확인하세요.');
     }
   }
 
-  init();
+  let debounceTimer = null;
+  function scheduleActivate() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(tryActivate, 250);
+  }
+
+  const globalObserver = new MutationObserver(scheduleActivate);
+  globalObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['style', 'class'],
+  });
+
+  tryActivate();
 })();
