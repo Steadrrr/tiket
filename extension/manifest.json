@@ -6,6 +6,12 @@
   "host_permissions": [
     "https://ioms.foresttrip.go.kr/*"
   ],
+  "permissions": [
+    "windows"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [

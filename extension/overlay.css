@@ -41,7 +41,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* justify-content를 center로 두면 힌트 문구가 있는 카드(단체 유형)와
+     없는 카드가 나란히 있을 때 ＋/－ 줄의 높이가 서로 어긋나 보인다.
+     대신 위쪽 내용(이름/가격/힌트)은 위에서부터 쌓고, ±버튼 줄만
+     margin-top:auto로 항상 카드 맨 아래에 붙여서 옆 카드와 높이를 맞춘다. */
+  justify-content: flex-start;
   gap: clamp(2px, 0.8vh, 8px);
   padding: clamp(6px, 1vh, 16px) 10px;
   border-radius: 14px;
@@ -77,7 +81,10 @@
   align-items: center;
   justify-content: center;
   gap: clamp(8px, 1.4vh, 18px);
-  margin-top: clamp(2px, 0.6vh, 6px);
+  /* 항상 카드 맨 아래에 붙어서, 위쪽 텍스트 줄 수가 카드마다 달라도
+     옆 카드와 ±버튼 높이가 나란히 맞춰진다. */
+  margin-top: auto;
+  padding-top: clamp(2px, 0.6vh, 6px);
 }
 
 .kiosk-qty-btn {
@@ -123,29 +130,29 @@
   cursor: default;
 }
 
-/* 화면에 보이지 않는 직원 전용 탈출 제스처 영역 (좌상단) */
-#kiosk-staff-exit-zone {
+/* 우측 상단의 눈에 잘 안 띄는 홈 버튼. 손님이 알아채지 못하도록 작고
+   흐릿하게 배경에 거의 묻히게 두되, 직원은 위치를 알고 누를 수 있게 한다. */
+#kiosk-home-btn {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 60px;
-  height: 60px;
+  top: clamp(6px, 1vh, 14px);
+  right: clamp(6px, 1vw, 14px);
   z-index: 2147483647;
-  background: transparent;
+  width: clamp(22px, 3vh, 30px);
+  height: clamp(22px, 3vh, 30px);
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.22);
+  font-size: clamp(11px, 1.6vh, 15px);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
 }
 
-/* 탈출 후 다시 키오스크 모드로 돌아가기 위한 작은 버튼 */
-#kiosk-reengage-btn {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 2147483647;
-  padding: 10px 16px;
-  font-size: 14px;
-  border-radius: 8px;
-  border: 1px solid #0b3d24;
-  background: #ffffff;
-  color: #0b3d24;
-  cursor: pointer;
-  opacity: 0.85;
+#kiosk-home-btn:active {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.55);
 }

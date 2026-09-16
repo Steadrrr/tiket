@@ -24,11 +24,31 @@
   const rowCfg = sel.ticketRow;
 
   let overlayRoot = null;
-  let staffExitZone = null;
-  let reengageBtn = null;
+  let homeBtn = null;
   let currentIframeDoc = null;
   let pendingDoc = null; // 현재 초기화 시도 중인 iframe 문서(중복 시도 방지용)
   let priceInterval = null;
+  let kioskFullscreenRequested = false;
+  let suppressedIframe = null; // 홈버튼으로 명시적으로 나간 iframe(재진입 억제용)
+
+  function requestKioskFullscreen() {
+    if (kioskFullscreenRequested) return;
+    kioskFullscreenRequested = true;
+    try {
+      chrome.runtime.sendMessage({ type: 'kiosk-enter-fullscreen' });
+    } catch (e) {
+      console.warn('[키오스크] 전체화면 전환 요청 실패:', e.message);
+    }
+  }
+
+  function exitKioskFullscreen() {
+    kioskFullscreenRequested = false;
+    try {
+      chrome.runtime.sendMessage({ type: 'kiosk-exit-fullscreen' });
+    } catch (e) {
+      console.warn('[키오스크] 전체화면 해제 요청 실패:', e.message);
+    }
+  }
 
   function isVisible(el) {
     if (!el) return false;
@@ -118,7 +138,7 @@
     el.dispatchEvent(new MouseEventCtor('click', { bubbles: true, cancelable: true, view: win }));
   }
 
-  function buildOverlay(doc, win, rows, payButtonEl, totalPriceEl) {
+  function buildOverlay(doc, win, rows, payButtonEl, totalPriceEl, iframe) {
     const root = document.createElement('div');
     root.id = 'kiosk-overlay-root';
 
@@ -260,48 +280,31 @@
 
     document.body.appendChild(root);
     overlayRoot = root;
-    setupStaffExit();
+    requestKioskFullscreen();
+    setupHomeButton(iframe);
   }
 
-  function setupStaffExit() {
-    const zone = document.createElement('div');
-    zone.id = 'kiosk-staff-exit-zone';
-    document.body.appendChild(zone);
-    staffExitZone = zone;
-
+  // 우측 상단의 눈에 잘 안 띄는 홈 버튼. 누르면 비밀번호를 물어보고, 맞으면
+  // 오버레이를 완전히 걷어내고 전체화면도 해제해서 원래 통합운영시스템
+  // 화면으로 돌아간다. 이후 이 iframe에 대해서는(같은 탭을 유지하는 한)
+  // 오버레이가 자동으로 다시 뜨지 않는다 - 새로고침하거나 탭을 닫았다
+  // 다시 열면 정상적으로 키오스크 모드가 다시 시작된다.
+  function setupHomeButton(iframe) {
     const btn = document.createElement('button');
-    btn.id = 'kiosk-reengage-btn';
+    btn.id = 'kiosk-home-btn';
     btn.type = 'button';
-    btn.textContent = '키오스크 모드로 복귀';
-    btn.style.display = 'none';
+    btn.title = '홈';
+    btn.textContent = '⌂';
     btn.addEventListener('click', () => {
-      if (overlayRoot) overlayRoot.style.display = '';
-      zone.style.display = '';
-      btn.style.display = 'none';
-    });
-    document.body.appendChild(btn);
-    reengageBtn = btn;
-
-    let taps = 0;
-    let windowTimer = null;
-
-    zone.addEventListener('click', () => {
-      taps += 1;
-      if (windowTimer) clearTimeout(windowTimer);
-      windowTimer = setTimeout(() => {
-        taps = 0;
-      }, cfg.staffExit.tapWindowMs);
-
-      if (taps >= cfg.staffExit.tapCount) {
-        taps = 0;
-        const input = window.prompt('직원 비밀번호를 입력하세요');
-        if (input === cfg.staffExit.password) {
-          if (overlayRoot) overlayRoot.style.display = 'none';
-          zone.style.display = 'none';
-          btn.style.display = '';
-        }
+      const input = window.prompt('비밀번호를 입력하세요');
+      if (input === cfg.homeButton.password) {
+        suppressedIframe = iframe;
+        teardownOverlay();
+        exitKioskFullscreen();
       }
     });
+    document.body.appendChild(btn);
+    homeBtn = btn;
   }
 
   function teardownOverlay() {
@@ -313,13 +316,9 @@
       overlayRoot.remove();
       overlayRoot = null;
     }
-    if (staffExitZone) {
-      staffExitZone.remove();
-      staffExitZone = null;
-    }
-    if (reengageBtn) {
-      reengageBtn.remove();
-      reengageBtn = null;
+    if (homeBtn) {
+      homeBtn.remove();
+      homeBtn = null;
     }
     currentIframeDoc = null;
     pendingDoc = null;
@@ -332,6 +331,8 @@
       if (overlayRoot || currentIframeDoc || pendingDoc) teardownOverlay();
       return;
     }
+
+    if (iframe === suppressedIframe) return; // 홈버튼으로 명시적으로 나간 상태, 자동 재진입 억제
 
     let doc;
     try {
@@ -356,7 +357,7 @@
 
       const totalPriceEl = sel.totalPriceDisplay ? doc.querySelector(sel.totalPriceDisplay) : null;
 
-      buildOverlay(doc, iframe.contentWindow, rows, payButtonEl, totalPriceEl);
+      buildOverlay(doc, iframe.contentWindow, rows, payButtonEl, totalPriceEl, iframe);
     } catch (err) {
       console.error('[키오스크] 초기화 실패:', err.message);
       console.error('[키오스크] config.js의 selectors 값이 실제 페이지와 일치하는지 확인하세요.');
