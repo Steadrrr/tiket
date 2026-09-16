@@ -23,6 +23,15 @@
   const sel = cfg.selectors;
   const rowCfg = sel.ticketRow;
 
+  // "LRC오류 또는 종료 버튼이 실행되었습니다" 같은 카드결제기 관련 알림은
+  // 발매 화면 iframe이 아니라, 결제 시 window.open()으로 새로 열리는
+  // 별도의 "단말기결제" 팝업창(같은 도메인의 다른 페이지) 안에서 뜬다.
+  // 그 창에는 발매유형 iframe이 아예 없어서 아래쪽의 iframe 기반 감시
+  // 로직이 걸리지 않으므로, 이 문서(그 창이든 메인 키오스크 창이든)
+  // 자체에도 항상 무조건 알림 자동 확인을 걸어둔다.
+  suppressNativeAlerts(window);
+  setupAutoDismissPopups(document, window);
+
   let overlayRoot = null;
   let homeBtn = null;
   let currentIframeDoc = null;
