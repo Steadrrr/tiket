@@ -266,3 +266,68 @@
   color: #6b8ca0;
   cursor: pointer;
 }
+
+/* 결제금액이 일정 금액 이상일 때 뜨는 실제 할부 선택 팝업을, 오버레이
+   위에도 똑같이 큼직하게 보여주기 위한 화면 */
+#kiosk-installment-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: rgba(10, 30, 45, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#kiosk-installment-card {
+  width: min(92vw, 640px);
+  background: #ffffff;
+  border-radius: 24px;
+  padding: clamp(20px, 3vh, 36px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(14px, 2vh, 24px);
+  box-shadow: 0 8px 30px rgba(20, 52, 75, 0.35);
+}
+
+.kiosk-installment-title {
+  text-align: center;
+  font-size: clamp(22px, 3vh, 32px);
+  font-weight: 700;
+  color: #14344b;
+}
+
+.kiosk-installment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(10px, 1.6vh, 18px);
+}
+
+.kiosk-installment-btn {
+  padding: clamp(20px, 3vh, 32px) 0;
+  font-size: clamp(18px, 2.6vh, 26px);
+  font-weight: 700;
+  border: none;
+  border-radius: 16px;
+  background: #eaf6fc;
+  color: #14344b;
+  cursor: pointer;
+}
+
+.kiosk-installment-btn:active {
+  background: #cfe9f7;
+}
+
+.kiosk-installment-btn-primary {
+  grid-column: span 3;
+  background: #2f8fc4;
+  color: #ffffff;
+}
+
+.kiosk-installment-btn-primary:active {
+  background: #24749f;
+}

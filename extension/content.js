@@ -168,6 +168,91 @@
     el.dispatchEvent(new MouseEventCtor('click', { bubbles: true, cancelable: true, view: win }));
   }
 
+  // 할부 선택 팝업(fn_selectMonth)은 dhtmlx 폼 버튼(id: PayMonth1~6,
+  // value: 일시불/2개월/.../6개월)으로 렌더링된다. id가 조금 달라져도
+  // 안전하도록, 절대 id가 아니라 버튼에 보이는 값/텍스트가 정확히
+  // "일시불", "2개월" 등과 일치하는지로 찾는다.
+  const INSTALLMENT_LABELS = ['일시불', '2개월', '3개월', '4개월', '5개월', '6개월'];
+
+  function findInstallmentButtons(doc) {
+    const found = {};
+    const candidates = Array.from(
+      doc.querySelectorAll('input[type="button"], input[type="submit"], button, a')
+    );
+    candidates.forEach((el) => {
+      const raw = el.value !== undefined && el.value !== '' ? el.value : el.textContent;
+      const text = (raw || '').trim();
+      if (INSTALLMENT_LABELS.includes(text) && !found[text]) {
+        found[text] = el;
+      }
+    });
+    return found;
+  }
+
+  function waitForInstallmentButtons(doc, timeoutMs = 6000) {
+    return new Promise((resolve) => {
+      function check() {
+        const found = findInstallmentButtons(doc);
+        if (Object.keys(found).length > 0) {
+          resolve(found);
+          return true;
+        }
+        return false;
+      }
+      if (check()) return;
+
+      const observer = new MutationObserver(() => {
+        if (check()) observer.disconnect();
+      });
+      observer.observe(doc.documentElement, { childList: true, subtree: true });
+
+      setTimeout(() => {
+        observer.disconnect();
+        resolve(null); // 할부 팝업 없이 바로 진행된 경우(금액 미만 등)
+      }, timeoutMs);
+    });
+  }
+
+  // 실제 할부 선택 팝업은 발매 화면 iframe 안(dhtmlx 팝업)에 작게 뜨는데,
+  // 우리 오버레이가 화면 전체를 덮고 있어 손님 눈에는 보이지 않는다.
+  // 그래서 같은 선택지를 오버레이 위에 큼직하게 다시 보여주고, 고른 값을
+  // 실제 버튼 클릭으로 그대로 전달한다.
+  function showInstallmentPicker(doc, win, buttonsMap) {
+    const backdrop = document.createElement('div');
+    backdrop.id = 'kiosk-installment-backdrop';
+
+    const card = document.createElement('div');
+    card.id = 'kiosk-installment-card';
+
+    const title = document.createElement('div');
+    title.className = 'kiosk-installment-title';
+    title.textContent = '할부 개월 수를 선택하세요';
+    card.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'kiosk-installment-grid';
+
+    INSTALLMENT_LABELS.forEach((label) => {
+      const realBtn = buttonsMap[label];
+      if (!realBtn) return;
+
+      const optBtn = document.createElement('button');
+      optBtn.type = 'button';
+      optBtn.className = 'kiosk-installment-btn';
+      if (label === '일시불') optBtn.classList.add('kiosk-installment-btn-primary');
+      optBtn.textContent = label;
+      optBtn.addEventListener('click', () => {
+        dispatchClick(realBtn, win);
+        backdrop.remove();
+      });
+      grid.appendChild(optBtn);
+    });
+
+    card.appendChild(grid);
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+  }
+
   function buildOverlay(doc, win, rows, payButtonEl, totalPriceEl, iframe) {
     const root = document.createElement('div');
     root.id = 'kiosk-overlay-root';
@@ -301,6 +386,15 @@
       payBtn.disabled = true;
       payBtn.textContent = '카드결제기 진행 중...';
       dispatchClick(payButtonEl, win);
+      // 총 결제금액이 일정 금액(보통 5만원) 이상이면 실제 페이지가 할부
+      // 개월수를 고르는 내부 팝업(일시불~6개월)을 띄운다. 그 팝업이
+      // 나타나는지 잠시 지켜보다가, 나타나면 오버레이 화면에 같은 선택지를
+      // 큼직하게 보여주고 손님이 고른 값을 실제 버튼 클릭으로 전달한다.
+      waitForInstallmentButtons(doc).then((buttonsMap) => {
+        if (buttonsMap) {
+          showInstallmentPicker(doc, win, buttonsMap);
+        }
+      });
       setTimeout(() => {
         payBtn.disabled = false;
         payBtn.textContent = '신용카드 결제';
