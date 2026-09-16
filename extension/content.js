@@ -23,15 +23,6 @@
   const sel = cfg.selectors;
   const rowCfg = sel.ticketRow;
 
-  // "LRC오류 또는 종료 버튼이 실행되었습니다" 같은 카드결제기 관련 알림은
-  // 발매 화면 iframe이 아니라, 결제 시 window.open()으로 새로 열리는
-  // 별도의 "단말기결제" 팝업창(같은 도메인의 다른 페이지) 안에서 뜬다.
-  // 그 창에는 발매유형 iframe이 아예 없어서 아래쪽의 iframe 기반 감시
-  // 로직이 걸리지 않으므로, 이 문서(그 창이든 메인 키오스크 창이든)
-  // 자체에도 항상 무조건 알림 자동 확인을 걸어둔다.
-  suppressNativeAlerts(window);
-  setupAutoDismissPopups(document, window);
-
   let overlayRoot = null;
   let homeBtn = null;
   let currentIframeDoc = null;
@@ -41,6 +32,31 @@
   let kioskConfirmed = false; // 배경 스크립트가 전체화면 적용을 확인해줬는지
   let suppressedIframe = null; // 홈버튼으로 명시적으로 나간 iframe(재진입 억제용)
   let paymentGuardUntil = 0; // 이 시각(ms) 전까지는 자동 재구성을 하지 않는다
+
+  // 카드결제기 취소/타임아웃 등으로 결제가 실패하면, 오버레이에 남아있던
+  // 발매유형별 선택 수량을 전부 0으로 되돌리고 처음부터 다시 고를 수
+  // 있게 한다. 오버레이를 통째로 걷어냈다가 다시 만들면 각 카드의 수량
+  // 변수가 자연스럽게 0으로 초기화된다.
+  function resetTicketSelection() {
+    paymentGuardUntil = 0;
+    teardownOverlay();
+    tryActivate();
+  }
+  // "LRC오류..." 알림은 발매 화면 iframe이 아니라 결제 시 window.open()으로
+  // 새로 열리는 별도의 "단말기결제" 팝업창에서 뜨는 경우가 많다. 그 창의
+  // content.js 인스턴스는 메인 키오스크 창과 전혀 다른 전역 상태를 가지므로,
+  // window.opener(=이 팝업을 열어준 원래 창)에 노출해 둔 리셋 함수를
+  // 호출하는 방식으로 "저 창에서 알림이 떴다"는 사실을 메인 창에 전달한다.
+  window.__kioskResetTicketSelection = resetTicketSelection;
+
+  // "LRC오류 또는 종료 버튼이 실행되었습니다" 같은 카드결제기 관련 알림은
+  // 발매 화면 iframe이 아니라, 결제 시 window.open()으로 새로 열리는
+  // 별도의 "단말기결제" 팝업창(같은 도메인의 다른 페이지) 안에서 뜬다.
+  // 그 창에는 발매유형 iframe이 아예 없어서 아래쪽의 iframe 기반 감시
+  // 로직이 걸리지 않으므로, 이 문서(그 창이든 메인 키오스크 창이든)
+  // 자체에도 항상 무조건 알림 자동 확인을 걸어둔다.
+  suppressNativeAlerts(window);
+  setupAutoDismissPopups(document, window);
 
   // 크롬은 최근 사용자 입력(클릭/키 입력 등)이 전혀 없는 상태에서는
   // chrome.windows.update(state:'fullscreen') 요청을 조용히 무시할 때가
@@ -154,6 +170,30 @@
     return preferred || candidates[0];
   }
 
+  // 이 알림이 결제 실패/취소를 의미하는 것인지 판단해서, 그렇다면 발매유형
+  // 선택을 초기화한다.
+  // - win.opener가 있으면 이 창은 결제 시 새로 열린 "단말기결제" 팝업창일
+  //   가능성이 높다. 그 창에서 뜨는 알림은 곧 결제 실패/취소를 의미하므로
+  //   항상 원래 창(opener)의 선택을 초기화한다.
+  // - opener가 없으면(메인 키오스크 창 자신) 결제 시도 중(paymentGuardUntil
+  //   이내)에 뜬 알림일 때만 초기화한다. 수량 제한처럼 결제와 무관한
+  //   안내까지 초기화해버리지 않기 위함이다.
+  function maybeResetAfterPopup(win) {
+    try {
+      if (win.opener && typeof win.opener.__kioskResetTicketSelection === 'function') {
+        win.opener.__kioskResetTicketSelection();
+        return true;
+      }
+    } catch (e) {
+      // 다른 오리진이라 접근이 막혔거나 opener가 이미 닫힌 경우 등은 무시
+    }
+    if (Date.now() < paymentGuardUntil) {
+      resetTicketSelection();
+      return true;
+    }
+    return false;
+  }
+
   function setupAutoDismissPopups(doc, win) {
     const handled = new WeakSet();
 
@@ -170,8 +210,9 @@
         const message = (textEl ? textEl.textContent : modalBox ? modalBox.textContent : '').trim();
 
         console.warn('[키오스크] 사이트 알림 팝업 자동 확인:', message);
-        showKioskToast(message);
         dispatchClick(btn, win);
+        const didReset = maybeResetAfterPopup(win);
+        showKioskToast(didReset ? `${message}\n처음부터 다시 선택해 주세요.` : message);
       });
     }
 
