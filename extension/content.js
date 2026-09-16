@@ -28,6 +28,7 @@
   let currentIframeDoc = null;
   let pendingDoc = null; // 현재 초기화 시도 중인 iframe 문서(중복 시도 방지용)
   let priceInterval = null;
+  let popupWatcherObserver = null; // dhtmlx 알림 팝업 자동 확인 감시자
   let kioskConfirmed = false; // 배경 스크립트가 전체화면 적용을 확인해줬는지
   let suppressedIframe = null; // 홈버튼으로 명시적으로 나간 iframe(재진입 억제용)
   let paymentGuardUntil = 0; // 이 시각(ms) 전까지는 자동 재구성을 하지 않는다
@@ -113,6 +114,56 @@
     toast.textContent = message;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 5000);
+  }
+
+  // 실제로 확인해보니 "LRC오류..." 같은 알림은 브라우저 네이티브 alert()가
+  // 아니라 dhtmlx 자체 팝업(확인 버튼 영역이 <div class="dhtmlx_popup_controls">)
+  // 이었다. 이건 그냥 DOM 요소라서 alert 가로채기로는 막을 수 없고, 대신
+  // 이 팝업이 나타나는지 계속 감시하다가 나타나면 "확인" 버튼을 찾아
+  // 자동으로 클릭 전달한다.
+  function findDismissButton(container) {
+    const candidates = Array.from(
+      container.querySelectorAll(
+        'button, input[type="button"], input[type="submit"], a, div[role="link"], [onclick]'
+      )
+    );
+    if (candidates.length === 0) return null;
+    const preferred = candidates.find((el) => {
+      const labelEl = el.querySelector && el.querySelector('.dhxform_btn_txt');
+      const text = ((labelEl ? labelEl.textContent : el.textContent) || '').trim();
+      return text === '확인' || text.toUpperCase() === 'OK';
+    });
+    return preferred || candidates[0];
+  }
+
+  function setupAutoDismissPopups(doc, win) {
+    const handled = new WeakSet();
+
+    function scan() {
+      const controlsList = Array.from(doc.querySelectorAll('.dhtmlx_popup_controls'));
+      controlsList.forEach((controls) => {
+        if (handled.has(controls)) return;
+        const btn = findDismissButton(controls);
+        if (!btn) return;
+        handled.add(controls);
+
+        // closest()는 자기 자신부터 검사하므로, controls 자신이 아니라
+        // 부모부터 찾아야 버튼 영역이 아닌 전체 팝업(메시지 포함)을 찾는다.
+        const wrapper =
+          (controls.parentElement && controls.parentElement.closest('[class*="dhtmlx_popup"]')) ||
+          controls.parentElement;
+        const message = wrapper ? wrapper.textContent.trim() : '';
+
+        console.warn('[키오스크] 사이트 알림 팝업 자동 확인:', message);
+        showKioskToast(message);
+        dispatchClick(btn, win);
+      });
+    }
+
+    scan();
+    const observer = new MutationObserver(scan);
+    observer.observe(doc.documentElement, { childList: true, subtree: true });
+    return observer;
   }
 
   function findActiveTicketIframe() {
@@ -585,6 +636,10 @@
       clearInterval(priceInterval);
       priceInterval = null;
     }
+    if (popupWatcherObserver) {
+      popupWatcherObserver.disconnect();
+      popupWatcherObserver = null;
+    }
     if (overlayRoot) {
       overlayRoot.remove();
       overlayRoot = null;
@@ -626,6 +681,7 @@
     currentIframeDoc = doc;
     pendingDoc = doc;
     suppressNativeAlerts(iframe.contentWindow);
+    popupWatcherObserver = setupAutoDismissPopups(doc, iframe.contentWindow);
 
     try {
       const { rows, payButtonEl } = await waitForTicketUi(doc);
