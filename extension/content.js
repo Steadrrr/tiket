@@ -326,15 +326,90 @@
     btn.title = '홈';
     btn.textContent = '⌂';
     btn.addEventListener('click', () => {
-      const input = window.prompt('비밀번호를 입력하세요');
-      if (input === cfg.homeButton.password) {
-        suppressedIframe = iframe;
-        teardownOverlay();
-        exitKioskFullscreen();
-      }
+      showPasswordKeypad(iframe);
     });
     document.body.appendChild(btn);
     homeBtn = btn;
+  }
+
+  // 물리 키보드가 없는 터치 전용 환경에서도 비밀번호를 입력할 수 있도록,
+  // window.prompt() 대신 화면에 직접 숫자 키패드를 그려서 보여준다.
+  function showPasswordKeypad(iframe) {
+    const backdrop = document.createElement('div');
+    backdrop.id = 'kiosk-keypad-backdrop';
+
+    const card = document.createElement('div');
+    card.id = 'kiosk-keypad-card';
+
+    const title = document.createElement('div');
+    title.className = 'kiosk-keypad-title';
+    title.textContent = '비밀번호 입력';
+
+    const display = document.createElement('div');
+    display.className = 'kiosk-keypad-display';
+
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'kiosk-keypad-error';
+
+    let entered = '';
+
+    function renderDisplay() {
+      display.textContent = entered.length > 0 ? '●'.repeat(entered.length) : ' ';
+    }
+    renderDisplay();
+
+    function cleanup() {
+      backdrop.remove();
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'kiosk-keypad-grid';
+
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '지우기', '0', '확인'].forEach((key) => {
+      const keyBtn = document.createElement('button');
+      keyBtn.type = 'button';
+      keyBtn.className = 'kiosk-keypad-btn';
+      if (key === '확인') keyBtn.classList.add('kiosk-keypad-confirm');
+      if (key === '지우기') keyBtn.classList.add('kiosk-keypad-clear');
+      keyBtn.textContent = key;
+
+      keyBtn.addEventListener('click', () => {
+        if (key === '지우기') {
+          entered = entered.slice(0, -1);
+          errorMsg.textContent = '';
+        } else if (key === '확인') {
+          if (entered === cfg.homeButton.password) {
+            cleanup();
+            suppressedIframe = iframe;
+            teardownOverlay();
+            exitKioskFullscreen();
+            return;
+          }
+          errorMsg.textContent = '비밀번호가 올바르지 않습니다';
+          entered = '';
+        } else {
+          entered += key;
+          errorMsg.textContent = '';
+        }
+        renderDisplay();
+      });
+
+      grid.appendChild(keyBtn);
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'kiosk-keypad-cancel';
+    cancelBtn.textContent = '취소';
+    cancelBtn.addEventListener('click', cleanup);
+
+    card.appendChild(title);
+    card.appendChild(display);
+    card.appendChild(errorMsg);
+    card.appendChild(grid);
+    card.appendChild(cancelBtn);
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
   }
 
   function teardownOverlay() {
@@ -396,6 +471,13 @@
     }
   }
 
+  // 이 사이트는 dhtmlx가 계속 자잘한 DOM 변화(스타일/클래스 변경 등)를
+  // 일으키는 편이라, "변화가 감지되면 250ms 뒤 확인"하는 순수 디바운스만
+  // 쓰면 변화가 끊이지 않아 타이머가 계속 밀리면서 한 번도 실행되지 않는
+  // 경우가 생길 수 있다(개발자도구를 열어 렌더링이 잠깐 멎어야만 그 틈에
+  // 실행되는 현상으로 나타남). 그래서 디바운스와는 별도로 일정 주기마다
+  // 무조건 한 번씩 확인하는 안전장치(폴링)를 같이 둔다. tryActivate()는
+  // 상태가 그대로면 바로 리턴하는 가벼운 함수라 자주 불러도 부담 없다.
   let debounceTimer = null;
   function scheduleActivate() {
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -409,6 +491,8 @@
     attributes: true,
     attributeFilter: ['style', 'class'],
   });
+
+  setInterval(tryActivate, 500);
 
   tryActivate();
 })();

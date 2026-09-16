@@ -169,3 +169,100 @@
   background: rgba(20, 52, 75, 0.16);
   color: rgba(20, 52, 75, 0.6);
 }
+
+/* 홈 버튼을 누르면 뜨는 가상 숫자 키패드. 물리 키보드가 없는 터치 전용
+   환경에서도 비밀번호를 입력할 수 있게 한다. */
+#kiosk-keypad-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: rgba(10, 30, 45, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#kiosk-keypad-card {
+  width: min(90vw, 340px);
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  box-shadow: 0 8px 30px rgba(20, 52, 75, 0.35);
+}
+
+.kiosk-keypad-title {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #14344b;
+}
+
+.kiosk-keypad-display {
+  text-align: center;
+  min-height: 28px;
+  font-size: 26px;
+  letter-spacing: 6px;
+  color: #14344b;
+  border-bottom: 2px solid #bfe1f2;
+  padding-bottom: 8px;
+}
+
+.kiosk-keypad-error {
+  min-height: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: #d64545;
+}
+
+.kiosk-keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.kiosk-keypad-btn {
+  padding: 16px 0;
+  font-size: 20px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  background: #eaf6fc;
+  color: #14344b;
+  cursor: pointer;
+}
+
+.kiosk-keypad-btn:active {
+  background: #cfe9f7;
+}
+
+.kiosk-keypad-btn.kiosk-keypad-confirm {
+  background: #2f8fc4;
+  color: #ffffff;
+}
+
+.kiosk-keypad-btn.kiosk-keypad-confirm:active {
+  background: #24749f;
+}
+
+.kiosk-keypad-btn.kiosk-keypad-clear {
+  background: #f0f0f0;
+  color: #555555;
+}
+
+.kiosk-keypad-cancel {
+  margin-top: 4px;
+  padding: 10px 0;
+  font-size: 14px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #6b8ca0;
+  cursor: pointer;
+}
