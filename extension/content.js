@@ -32,6 +32,7 @@
   let kioskConfirmed = false; // 배경 스크립트가 전체화면 적용을 확인해줬는지
   let suppressedIframe = null; // 홈버튼으로 명시적으로 나간 iframe(재진입 억제용)
   let paymentGuardUntil = 0; // 이 시각(ms) 전까지는 자동 재구성을 하지 않는다
+  let idleTimer = null; // 수량 선택 후 무조작 시간을 재는 타이머
 
   // 카드결제기 취소/타임아웃 등으로 결제가 실패하면, 오버레이에 남아있던
   // 발매유형별 선택 수량을 전부 0으로 되돌리고 처음부터 다시 고를 수
@@ -441,6 +442,13 @@
     const typeGrid = document.createElement('div');
     typeGrid.className = 'kiosk-type-grid';
 
+    // 각 카드별로 "선택된 수량을 진짜로 0으로 되돌리는" 함수를 모아둔다.
+    // 단순히 화면 표시만 바꾸면 실제 사이트의 장바구니("이용상품정보")에는
+    // 손님이 고른 수량이 그대로 남아, 다음 손님 주문에 합산되어 버린다.
+    // 그래서 clickMany로 실제 "－" 셀을 선택 수량만큼 눌러 진짜 장바구니도
+    // 함께 비운다.
+    const cardResetters = [];
+
     rows
       .filter((row) => {
         const name = row.nameCell.textContent.trim();
@@ -535,6 +543,14 @@
 
         card.appendChild(qtyControl);
         typeGrid.appendChild(card);
+
+        cardResetters.push(() => {
+          if (qty <= 0) return false;
+          clickMany(decCell, qty); // 화면뿐 아니라 실제 장바구니에서도 정확히 취소
+          qty = 0;
+          qtyDisplay.textContent = qty;
+          return true;
+        });
       });
 
     root.appendChild(typeGrid);
@@ -582,6 +598,24 @@
       }, 8000);
     });
     root.appendChild(payBtn);
+
+    // --- 무조작 자동 초기화 ---
+    // 수량을 고른 채로 한참 조작이 없으면(손님이 자리를 뜬 경우 등),
+    // 다음 손님 주문에 앞 손님의 선택이 합산되지 않도록 자동으로
+    // 선택 수량을 되돌린다. 오버레이 안에서 일어나는 어떤 조작이든
+    // (수량 버튼, 결제 버튼 등) 카운트다운을 다시 시작시킨다.
+    function resetIdleTimer() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        idleTimer = null;
+        const didAny = cardResetters.reduce((any, resetOne) => resetOne() || any, false);
+        if (didAny) {
+          showKioskToast('선택수량이 초기화됩니다');
+        }
+      }, cfg.idleResetMs);
+    }
+    root.addEventListener('click', resetIdleTimer);
+    resetIdleTimer();
 
     document.body.appendChild(root);
     overlayRoot = root;
@@ -691,6 +725,10 @@
     if (priceInterval) {
       clearInterval(priceInterval);
       priceInterval = null;
+    }
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
     }
     if (popupWatcherObserver) {
       popupWatcherObserver.disconnect();

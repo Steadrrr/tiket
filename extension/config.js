@@ -26,6 +26,11 @@ window.KIOSK_CONFIG = {
   bulkMinQty: 30,
   bulkMaxQty: 200,
 
+  // 발매유형에 수량이 선택된 채로 이 시간(ms) 이상 오버레이 조작이 없으면,
+  // 손님이 자리를 떠난 것으로 보고 선택 수량을 자동으로 0으로 되돌린다
+  // (실제 장바구니도 함께 비워서 다음 손님 주문에 합산되지 않게 한다).
+  idleResetMs: 60000,
+
   selectors: {
     // 발매유형은 dhtmlx 그리드의 <tr> 한 줄로 렌더링되며, 실제 확인된 HTML은:
     //   <td>일반</td><td>2,000</td><td><font color="blue">－</font></td>
