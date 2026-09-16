@@ -14,6 +14,18 @@ window.KIOSK_CONFIG = {
   // 패턴을 조정하세요.
   ticketFrameSrcPattern: /\/rep\/sm\/sm\/sptMngmeSalInsertEN\//,
 
+  // 키오스크에서는 팔지 않는 유형(직원 창구에서만 처리). 발매유형 이름이
+  // 정확히 일치하면 오버레이 카드 목록에서 제외한다.
+  excludedTypeNames: ['쉬자파크숙박', '유료프로그램이용', '백운봉휴양림숙박', '시설대관'],
+
+  // 최소 구매 수량이 정해져 있는 단체 유형. 이 유형은:
+  // - "＋"를 처음 누르면 0 → bulkMinQty(30)으로 바로 올라가고, 그 다음부터는 1씩 증가
+  // - "－"를 눌렀을 때 결과가 bulkMinQty 미만이 되면 30에서 바로 0으로 내려간다
+  //   (예: 30에서 － → 0. 31에서 － → 30)
+  bulkTypeNames: ['단체(일반)', '단체(초중고학생)'],
+  bulkMinQty: 30,
+  bulkMaxQty: 200,
+
   selectors: {
     // 발매유형은 dhtmlx 그리드의 <tr> 한 줄로 렌더링되며, 실제 확인된 HTML은:
     //   <td>일반</td><td>2,000</td><td><font color="blue">－</font></td>

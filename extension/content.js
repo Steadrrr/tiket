@@ -102,65 +102,101 @@
     const typeGrid = document.createElement('div');
     typeGrid.className = 'kiosk-type-grid';
 
-    rows.forEach((row) => {
-      const name = row.children[rowCfg.nameColIndex].textContent.trim();
-      const price = row.children[rowCfg.priceColIndex].textContent.trim();
-      const decCell = row.children[rowCfg.decBtnColIndex];
-      const addCell = row.children[rowCfg.addBtnColIndex];
+    rows
+      .filter((row) => {
+        const name = row.children[rowCfg.nameColIndex].textContent.trim();
+        return !cfg.excludedTypeNames.includes(name);
+      })
+      .forEach((row) => {
+        const name = row.children[rowCfg.nameColIndex].textContent.trim();
+        const price = row.children[rowCfg.priceColIndex].textContent.trim();
+        const decCell = row.children[rowCfg.decBtnColIndex];
+        const addCell = row.children[rowCfg.addBtnColIndex];
 
-      let qty = 0;
+        const isBulk = cfg.bulkTypeNames.includes(name);
+        const maxQty = isBulk ? cfg.bulkMaxQty : cfg.selectors.quantityMax;
 
-      const card = document.createElement('div');
-      card.className = 'kiosk-type-card';
+        let qty = 0;
 
-      const nameEl = document.createElement('div');
-      nameEl.className = 'kiosk-type-name';
-      nameEl.textContent = name;
+        const card = document.createElement('div');
+        card.className = 'kiosk-type-card';
 
-      const priceEl = document.createElement('div');
-      priceEl.className = 'kiosk-type-price';
-      priceEl.textContent = price + '원';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'kiosk-type-name';
+        nameEl.textContent = name;
 
-      const qtyControl = document.createElement('div');
-      qtyControl.className = 'kiosk-qty-control';
+        const priceEl = document.createElement('div');
+        priceEl.className = 'kiosk-type-price';
+        priceEl.textContent = price + '원';
+        if (isBulk) {
+          const hint = document.createElement('div');
+          hint.className = 'kiosk-type-hint';
+          hint.textContent = `최소 ${cfg.bulkMinQty}명부터 신청 가능`;
+          card.appendChild(nameEl);
+          card.appendChild(priceEl);
+          card.appendChild(hint);
+        } else {
+          card.appendChild(nameEl);
+          card.appendChild(priceEl);
+        }
 
-      const minusBtn = document.createElement('button');
-      minusBtn.type = 'button';
-      minusBtn.className = 'kiosk-qty-btn';
-      minusBtn.textContent = '－';
+        const qtyControl = document.createElement('div');
+        qtyControl.className = 'kiosk-qty-control';
 
-      const qtyDisplay = document.createElement('div');
-      qtyDisplay.className = 'kiosk-qty-display';
-      qtyDisplay.textContent = qty;
+        const minusBtn = document.createElement('button');
+        minusBtn.type = 'button';
+        minusBtn.className = 'kiosk-qty-btn';
+        minusBtn.textContent = '－';
 
-      const plusBtn = document.createElement('button');
-      plusBtn.type = 'button';
-      plusBtn.className = 'kiosk-qty-btn';
-      plusBtn.textContent = '＋';
-
-      minusBtn.addEventListener('click', () => {
-        if (qty <= 0) return;
-        dispatchClick(decCell, win);
-        qty -= 1;
+        const qtyDisplay = document.createElement('div');
+        qtyDisplay.className = 'kiosk-qty-display';
         qtyDisplay.textContent = qty;
+
+        const plusBtn = document.createElement('button');
+        plusBtn.type = 'button';
+        plusBtn.className = 'kiosk-qty-btn';
+        plusBtn.textContent = '＋';
+
+        function clickMany(cell, times) {
+          for (let i = 0; i < times; i += 1) {
+            dispatchClick(cell, win);
+          }
+        }
+
+        minusBtn.addEventListener('click', () => {
+          if (qty <= 0) return;
+          if (isBulk && qty - 1 < cfg.bulkMinQty) {
+            // 단체 최소수량 미만으로는 못 내려가므로, 바로 0으로 초기화
+            // (실제 장바구니에도 현재 수량만큼 － 클릭을 반복 전달해 0으로 맞춘다)
+            clickMany(decCell, qty);
+            qty = 0;
+          } else {
+            dispatchClick(decCell, win);
+            qty -= 1;
+          }
+          qtyDisplay.textContent = qty;
+        });
+
+        plusBtn.addEventListener('click', () => {
+          if (qty >= maxQty) return;
+          if (isBulk && qty <= 0) {
+            // 단체 최초 신청은 최소수량(30)부터 시작
+            clickMany(addCell, cfg.bulkMinQty);
+            qty = cfg.bulkMinQty;
+          } else {
+            dispatchClick(addCell, win);
+            qty += 1;
+          }
+          qtyDisplay.textContent = qty;
+        });
+
+        qtyControl.appendChild(minusBtn);
+        qtyControl.appendChild(qtyDisplay);
+        qtyControl.appendChild(plusBtn);
+
+        card.appendChild(qtyControl);
+        typeGrid.appendChild(card);
       });
-
-      plusBtn.addEventListener('click', () => {
-        if (qty >= cfg.selectors.quantityMax) return;
-        dispatchClick(addCell, win);
-        qty += 1;
-        qtyDisplay.textContent = qty;
-      });
-
-      qtyControl.appendChild(minusBtn);
-      qtyControl.appendChild(qtyDisplay);
-      qtyControl.appendChild(plusBtn);
-
-      card.appendChild(nameEl);
-      card.appendChild(priceEl);
-      card.appendChild(qtyControl);
-      typeGrid.appendChild(card);
-    });
 
     root.appendChild(typeGrid);
 

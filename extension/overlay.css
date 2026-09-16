@@ -54,6 +54,12 @@
   opacity: 0.85;
 }
 
+.kiosk-type-hint {
+  font-size: 15px;
+  opacity: 0.75;
+  color: #ffe08a;
+}
+
 .kiosk-qty-control {
   display: flex;
   align-items: center;
