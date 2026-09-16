@@ -1,0 +1,118 @@
+/* 실제 페이지 위를 완전히 덮는 키오스크 오버레이. 실제 DOM/스타일은 건드리지 않고
+   그 위에 새 레이어만 올려서, 문제가 생기면 언제든 안전하게 걷어낼 수 있게 한다. */
+
+#kiosk-overlay-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: #0b3d24;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 40px;
+  box-sizing: border-box;
+  font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.kiosk-title {
+  font-size: 44px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.kiosk-section {
+  width: 100%;
+  max-width: 900px;
+}
+
+.kiosk-section-label {
+  font-size: 26px;
+  margin-bottom: 14px;
+  opacity: 0.9;
+}
+
+.kiosk-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.kiosk-type-btn {
+  padding: 28px 16px;
+  font-size: 26px;
+  border-radius: 16px;
+  border: 3px solid #ffffff55;
+  background: #ffffff22;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.kiosk-type-btn.selected {
+  background: #ffffff;
+  color: #0b3d24;
+  border-color: #ffffff;
+  font-weight: 700;
+}
+
+.kiosk-qty-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+}
+
+.kiosk-qty-btn {
+  width: 96px;
+  height: 96px;
+  font-size: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #ffffff;
+  color: #0b3d24;
+  cursor: pointer;
+}
+
+.kiosk-qty-display {
+  min-width: 120px;
+  text-align: center;
+  font-size: 56px;
+  font-weight: 700;
+}
+
+.kiosk-price {
+  font-size: 34px;
+  font-weight: 700;
+}
+
+.kiosk-pay-btn {
+  margin-top: 12px;
+  padding: 28px 90px;
+  font-size: 34px;
+  font-weight: 700;
+  border: none;
+  border-radius: 20px;
+  background: #e8622c;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.kiosk-pay-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 화면에 보이지 않는 직원 전용 탈출 제스처 영역 (좌상단) */
+#kiosk-staff-exit-zone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 60px;
+  height: 60px;
+  z-index: 2147483647;
+  background: transparent;
+}
