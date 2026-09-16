@@ -12,8 +12,8 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: clamp(8px, 1.5vh, 20px);
-  padding: clamp(12px, 2vh, 32px) clamp(16px, 2vw, 40px);
+  gap: clamp(14px, 2.4vh, 30px);
+  padding: clamp(18px, 3vh, 44px) clamp(22px, 3vw, 52px);
   box-sizing: border-box;
   overflow: hidden;
   font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
@@ -24,7 +24,7 @@
 .kiosk-title {
   flex: 0 0 auto;
   text-align: center;
-  font-size: clamp(20px, 3.2vh, 40px);
+  font-size: clamp(30px, 5vh, 60px);
   font-weight: 700;
   color: #14344b;
 }
@@ -36,7 +36,7 @@
   /* 해상도에 상관없이 항상 4열로 고정. 항목이 8개 이하면 자연히 2줄이 된다. */
   grid-template-columns: repeat(4, 1fr);
   grid-auto-rows: 1fr;
-  gap: clamp(8px, 1.4vh, 18px);
+  gap: clamp(14px, 2.2vh, 28px);
 }
 
 .kiosk-type-card {
@@ -48,9 +48,9 @@
      대신 위쪽 내용(이름/가격/힌트)은 위에서부터 쌓고, ±버튼 줄만
      margin-top:auto로 항상 카드 맨 아래에 붙여서 옆 카드와 높이를 맞춘다. */
   justify-content: flex-start;
-  gap: clamp(2px, 0.8vh, 8px);
-  padding: clamp(6px, 1vh, 16px) 10px;
-  border-radius: 16px;
+  gap: clamp(4px, 1.2vh, 12px);
+  padding: clamp(10px, 1.8vh, 26px) 14px;
+  border-radius: 20px;
   border: 1px solid #bfe1f2;
   background: #ffffff;
   box-shadow: 0 2px 8px rgba(28, 82, 116, 0.08);
@@ -59,7 +59,7 @@
 }
 
 .kiosk-type-name {
-  font-size: clamp(14px, 2.2vh, 24px);
+  font-size: clamp(22px, 3.6vh, 40px);
   font-weight: 700;
   color: #14344b;
   white-space: nowrap;
@@ -69,12 +69,12 @@
 }
 
 .kiosk-type-price {
-  font-size: clamp(11px, 1.4vh, 17px);
+  font-size: clamp(16px, 2.4vh, 28px);
   color: #4c7996;
 }
 
 .kiosk-type-hint {
-  font-size: clamp(9px, 1.1vh, 12px);
+  font-size: clamp(13px, 1.8vh, 20px);
   color: #d98a1a;
   text-align: center;
 }
@@ -83,17 +83,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(8px, 1.4vh, 18px);
+  gap: clamp(14px, 2.2vh, 28px);
   /* 항상 카드 맨 아래에 붙어서, 위쪽 텍스트 줄 수가 카드마다 달라도
      옆 카드와 ±버튼 높이가 나란히 맞춰진다. */
   margin-top: auto;
-  padding-top: clamp(2px, 0.6vh, 6px);
+  padding-top: clamp(4px, 1vh, 10px);
 }
 
 .kiosk-qty-btn {
-  width: clamp(32px, 5vh, 52px);
-  height: clamp(32px, 5vh, 52px);
-  font-size: clamp(16px, 2.4vh, 26px);
+  width: clamp(50px, 8vh, 88px);
+  height: clamp(50px, 8vh, 88px);
+  font-size: clamp(26px, 4vh, 44px);
   border-radius: 50%;
   border: none;
   background: #5eb3e0;
@@ -107,9 +107,9 @@
 }
 
 .kiosk-qty-display {
-  min-width: clamp(28px, 4vw, 50px);
+  min-width: clamp(44px, 6vw, 80px);
   text-align: center;
-  font-size: clamp(16px, 2.6vh, 28px);
+  font-size: clamp(28px, 4.2vh, 46px);
   font-weight: 700;
   color: #14344b;
 }
@@ -117,18 +117,18 @@
 .kiosk-price {
   flex: 0 0 auto;
   text-align: center;
-  font-size: clamp(16px, 2.4vh, 28px);
+  font-size: clamp(26px, 4vh, 46px);
   font-weight: 700;
   color: #14344b;
 }
 
 .kiosk-pay-btn {
   flex: 0 0 auto;
-  padding: clamp(10px, 1.8vh, 22px) 40px;
-  font-size: clamp(18px, 2.6vh, 30px);
+  padding: clamp(18px, 3vh, 34px) 56px;
+  font-size: clamp(28px, 4.2vh, 48px);
   font-weight: 700;
   border: none;
-  border-radius: 16px;
+  border-radius: 20px;
   background: #2f8fc4;
   color: #ffffff;
   cursor: pointer;
@@ -185,54 +185,54 @@
 }
 
 #kiosk-keypad-card {
-  width: min(90vw, 340px);
+  width: min(90vw, 420px);
   background: #ffffff;
-  border-radius: 20px;
-  padding: 24px;
+  border-radius: 24px;
+  padding: 30px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
+  gap: 16px;
   box-shadow: 0 8px 30px rgba(20, 52, 75, 0.35);
 }
 
 .kiosk-keypad-title {
   text-align: center;
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 700;
   color: #14344b;
 }
 
 .kiosk-keypad-display {
   text-align: center;
-  min-height: 28px;
-  font-size: 26px;
-  letter-spacing: 6px;
+  min-height: 34px;
+  font-size: 32px;
+  letter-spacing: 8px;
   color: #14344b;
   border-bottom: 2px solid #bfe1f2;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
 }
 
 .kiosk-keypad-error {
-  min-height: 18px;
+  min-height: 22px;
   text-align: center;
-  font-size: 13px;
+  font-size: 16px;
   color: #d64545;
 }
 
 .kiosk-keypad-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .kiosk-keypad-btn {
-  padding: 16px 0;
-  font-size: 20px;
+  padding: 22px 0;
+  font-size: 26px;
   font-weight: 700;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #eaf6fc;
   color: #14344b;
   cursor: pointer;
@@ -258,8 +258,8 @@
 
 .kiosk-keypad-cancel {
   margin-top: 4px;
-  padding: 10px 0;
-  font-size: 14px;
+  padding: 12px 0;
+  font-size: 17px;
   border: none;
   border-radius: 10px;
   background: transparent;
