@@ -28,27 +28,57 @@
   let currentIframeDoc = null;
   let pendingDoc = null; // 현재 초기화 시도 중인 iframe 문서(중복 시도 방지용)
   let priceInterval = null;
-  let kioskFullscreenRequested = false;
+  let kioskConfirmed = false; // 배경 스크립트가 전체화면 적용을 확인해줬는지
   let suppressedIframe = null; // 홈버튼으로 명시적으로 나간 iframe(재진입 억제용)
 
+  // 크롬은 최근 사용자 입력(클릭/키 입력 등)이 전혀 없는 상태에서는
+  // chrome.windows.update(state:'fullscreen') 요청을 조용히 무시할 때가
+  // 있다. 그래서 오버레이가 뜬 직후 1차 시도를 하고, 그 뒤로는 사용자가
+  // 아무 클릭/키 입력을 할 때마다(문서 전체에 캡처링 리스너) 성공할
+  // 때까지 계속 재시도한다.
   function requestKioskFullscreen() {
-    if (kioskFullscreenRequested) return;
-    kioskFullscreenRequested = true;
+    if (kioskConfirmed) return;
     try {
-      chrome.runtime.sendMessage({ type: 'kiosk-enter-fullscreen' });
+      chrome.runtime.sendMessage({ type: 'kiosk-enter-fullscreen' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[키오스크] 전체화면 요청 오류:', chrome.runtime.lastError.message);
+          return;
+        }
+        if (response && response.ok) {
+          kioskConfirmed = true;
+        }
+      });
     } catch (e) {
-      console.warn('[키오스크] 전체화면 전환 요청 실패:', e.message);
+      console.warn('[키오스크] 전체화면 요청 실패:', e.message);
     }
   }
 
   function exitKioskFullscreen() {
-    kioskFullscreenRequested = false;
+    kioskConfirmed = false;
     try {
       chrome.runtime.sendMessage({ type: 'kiosk-exit-fullscreen' });
     } catch (e) {
       console.warn('[키오스크] 전체화면 해제 요청 실패:', e.message);
     }
   }
+
+  // 오버레이가 떠 있는 동안 발생하는 모든 클릭/키 입력을 전체화면 재시도
+  // 기회로 사용한다 (오버레이 자체 버튼 클릭 포함). kioskConfirmed가 true가
+  // 되면 더 이상 호출하지 않는다.
+  document.addEventListener(
+    'click',
+    () => {
+      if (overlayRoot && !kioskConfirmed) requestKioskFullscreen();
+    },
+    true
+  );
+  document.addEventListener(
+    'keydown',
+    () => {
+      if (overlayRoot && !kioskConfirmed) requestKioskFullscreen();
+    },
+    true
+  );
 
   function isVisible(el) {
     if (!el) return false;

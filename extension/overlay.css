@@ -1,14 +1,14 @@
 /* 실제 페이지 위를 완전히 덮는 키오스크 오버레이. 실제 DOM/스타일은 건드리지 않고
    그 위에 새 레이어만 올려서, 문제가 생기면 언제든 안전하게 걷어낼 수 있게 한다.
-   발매유형 개수가 몇 개든 스크롤 없이 한 화면에 다 들어오도록, 위/아래
-   고정 영역을 제외한 나머지 공간을 grid로 나눠 채운다. */
+   발매유형은 해상도와 무관하게 항상 4열(최대 2줄)로 배치해 스크롤 없이
+   한 화면에 다 들어오게 한다. */
 
 #kiosk-overlay-root {
   position: fixed;
   inset: 0;
   z-index: 2147483647;
-  background: #0b3d24;
-  color: #ffffff;
+  background: linear-gradient(180deg, #eaf6fc 0%, #d3ecf8 100%);
+  color: #1c3b52;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -26,15 +26,17 @@
   text-align: center;
   font-size: clamp(20px, 3.2vh, 40px);
   font-weight: 700;
+  color: #14344b;
 }
 
 .kiosk-type-grid {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* 해상도에 상관없이 항상 4열로 고정. 항목이 8개 이하면 자연히 2줄이 된다. */
+  grid-template-columns: repeat(4, 1fr);
   grid-auto-rows: 1fr;
-  gap: clamp(6px, 1.2vh, 16px);
+  gap: clamp(8px, 1.4vh, 18px);
 }
 
 .kiosk-type-card {
@@ -48,9 +50,10 @@
   justify-content: flex-start;
   gap: clamp(2px, 0.8vh, 8px);
   padding: clamp(6px, 1vh, 16px) 10px;
-  border-radius: 14px;
-  border: 2px solid #ffffff33;
-  background: #ffffff14;
+  border-radius: 16px;
+  border: 1px solid #bfe1f2;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(28, 82, 116, 0.08);
   min-width: 0;
   overflow: hidden;
 }
@@ -58,6 +61,7 @@
 .kiosk-type-name {
   font-size: clamp(14px, 2.2vh, 24px);
   font-weight: 700;
+  color: #14344b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -66,13 +70,12 @@
 
 .kiosk-type-price {
   font-size: clamp(11px, 1.4vh, 17px);
-  opacity: 0.85;
+  color: #4c7996;
 }
 
 .kiosk-type-hint {
   font-size: clamp(9px, 1.1vh, 12px);
-  opacity: 0.8;
-  color: #ffe08a;
+  color: #d98a1a;
   text-align: center;
 }
 
@@ -93,10 +96,14 @@
   font-size: clamp(16px, 2.4vh, 26px);
   border-radius: 50%;
   border: none;
-  background: #ffffff;
-  color: #0b3d24;
+  background: #5eb3e0;
+  color: #ffffff;
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+.kiosk-qty-btn:active {
+  background: #3f9bcb;
 }
 
 .kiosk-qty-display {
@@ -104,6 +111,7 @@
   text-align: center;
   font-size: clamp(16px, 2.6vh, 28px);
   font-weight: 700;
+  color: #14344b;
 }
 
 .kiosk-price {
@@ -111,6 +119,7 @@
   text-align: center;
   font-size: clamp(16px, 2.4vh, 28px);
   font-weight: 700;
+  color: #14344b;
 }
 
 .kiosk-pay-btn {
@@ -120,9 +129,13 @@
   font-weight: 700;
   border: none;
   border-radius: 16px;
-  background: #e8622c;
+  background: #2f8fc4;
   color: #ffffff;
   cursor: pointer;
+}
+
+.kiosk-pay-btn:active {
+  background: #24749f;
 }
 
 .kiosk-pay-btn:disabled {
@@ -141,8 +154,8 @@
   height: clamp(22px, 3vh, 30px);
   border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.22);
+  background: rgba(20, 52, 75, 0.06);
+  color: rgba(20, 52, 75, 0.25);
   font-size: clamp(11px, 1.6vh, 15px);
   line-height: 1;
   display: flex;
@@ -153,6 +166,6 @@
 }
 
 #kiosk-home-btn:active {
-  background: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.55);
+  background: rgba(20, 52, 75, 0.16);
+  color: rgba(20, 52, 75, 0.6);
 }
