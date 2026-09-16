@@ -7,14 +7,13 @@
 //
 // 1) 최상위(top) 프레임에서만 동작한다 (manifest에서 all_frames: false).
 // 2) config.js의 ticketFrameSrcPattern과 src가 일치하면서 "현재 화면에
-//    보이는(visible)" iframe을 계속 찾는다. (같은 src의 iframe이 탭
-//    전환으로 숨겨진 채 DOM에 남아있을 수 있기 때문)
-// 3) 그 iframe이 활성 상태가 되면, iframe.contentDocument 안에서 발매유형/
-//    수량/결제버튼 요소를 찾아 최상위 문서 위에 전체화면 오버레이를 만든다.
-// 4) 오버레이의 조작은 항상 iframe 내부의 진짜 요소 값을 바꾸고 진짜
-//    이벤트를 발생시키는 방식으로 처리한다 (로그인 세션/결제 로직은 그대로).
-// 5) 메뉴 탭이 바뀌거나 닫히면(= 발매 화면이 더 이상 보이지 않으면) 오버레이를
-//    자동으로 걷어내서, 다른 업무(환불, 매표소변경 등)는 평소처럼 쓸 수 있다.
+//    보이는(visible)" iframe을 계속 찾는다.
+// 3) 그 iframe 안의 발매유형 그리드(dhtmlx가 렌더링한 순수 <table>)에서
+//    "－"/"＋" 버튼이 있는 행들을 찾아, 최상위 문서 위에 카드 형태의
+//    전체화면 오버레이를 만든다.
+// 4) 오버레이의 ＋/－ 버튼은 실제 그리드의 해당 셀에 진짜 클릭 이벤트를
+//    그대로 전달한다 (dhtmlx 내부 로직/세션/결제 흐름은 손대지 않음).
+// 5) 메뉴 탭이 바뀌거나 닫히면 오버레이를 자동으로 걷어낸다.
 // ============================================================================
 (function () {
   const cfg = window.KIOSK_CONFIG;
@@ -22,12 +21,13 @@
   if (window.top !== window.self) return; // 최상위 문서에서만 실행
 
   const sel = cfg.selectors;
+  const rowCfg = sel.ticketRow;
 
   let overlayRoot = null;
   let staffExitZone = null;
   let reengageBtn = null;
   let currentIframeDoc = null;
-  let activeTeardown = null;
+  let priceInterval = null;
 
   function isVisible(el) {
     if (!el) return false;
@@ -46,76 +46,51 @@
     return null;
   }
 
-  function waitForElementIn(doc, selector, timeoutMs = 15000) {
+  function findTicketRows(doc) {
+    const rows = Array.from(doc.querySelectorAll('tr'));
+    return rows.filter((tr) => {
+      const cells = tr.children;
+      if (cells.length <= rowCfg.addBtnColIndex) return false;
+      const dec = cells[rowCfg.decBtnColIndex];
+      const add = cells[rowCfg.addBtnColIndex];
+      if (!dec || !add) return false;
+      const decTxt = dec.textContent.trim();
+      const addTxt = add.textContent.trim();
+      return rowCfg.decGlyphs.includes(decTxt) && rowCfg.addGlyphs.includes(addTxt);
+    });
+  }
+
+  function waitForTicketUi(doc, timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
-      const existing = doc.querySelector(selector);
-      if (existing) return resolve(existing);
+      function check() {
+        const rows = findTicketRows(doc);
+        const payButtonEl = doc.querySelector(sel.payButton);
+        if (rows.length > 0 && payButtonEl) {
+          resolve({ rows, payButtonEl });
+          return true;
+        }
+        return false;
+      }
+      if (check()) return;
 
       const observer = new MutationObserver(() => {
-        const el = doc.querySelector(selector);
-        if (el) {
-          observer.disconnect();
-          resolve(el);
-        }
+        if (check()) observer.disconnect();
       });
       observer.observe(doc.documentElement, { childList: true, subtree: true });
 
       setTimeout(() => {
         observer.disconnect();
-        reject(new Error(`요소를 찾지 못했습니다: ${selector}`));
+        reject(new Error('발매유형 그리드 또는 신용카드 버튼을 찾지 못했습니다.'));
       }, timeoutMs);
     });
   }
 
-  function dispatchRealEvents(el, types) {
-    types.forEach((type) => {
-      el.dispatchEvent(new Event(type, { bubbles: true }));
-    });
+  function dispatchClick(el, win) {
+    const MouseEventCtor = win.MouseEvent || MouseEvent;
+    el.dispatchEvent(new MouseEventCtor('click', { bubbles: true, cancelable: true, view: win }));
   }
 
-  function readOptionLabel(doc, optionEl) {
-    switch (sel.ticketTypeLabelSource) {
-      case 'text':
-        return optionEl.textContent.trim();
-      case 'value':
-        return optionEl.value;
-      case 'label':
-      default: {
-        if (optionEl.id) {
-          const labelEl = doc.querySelector(`label[for="${CSS.escape(optionEl.id)}"]`);
-          if (labelEl) return labelEl.textContent.trim();
-        }
-        const parentLabel = optionEl.closest('label');
-        if (parentLabel) return parentLabel.textContent.trim();
-        return optionEl.textContent.trim() || optionEl.value || '옵션';
-      }
-    }
-  }
-
-  function selectRealTicketType(optionEl) {
-    if (optionEl.tagName === 'INPUT' && (optionEl.type === 'radio' || optionEl.type === 'checkbox')) {
-      optionEl.checked = true;
-      dispatchRealEvents(optionEl, ['input', 'change', 'click']);
-    } else if (optionEl.tagName === 'OPTION') {
-      const selectEl = optionEl.closest('select');
-      if (selectEl) {
-        selectEl.value = optionEl.value;
-        dispatchRealEvents(selectEl, ['input', 'change']);
-      }
-    } else {
-      optionEl.click();
-    }
-  }
-
-  function setRealQuantity(win, inputEl, value) {
-    const clamped = Math.min(sel.quantityMax, Math.max(sel.quantityMin, value));
-    const nativeSetter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
-    nativeSetter.call(inputEl, String(clamped));
-    dispatchRealEvents(inputEl, ['input', 'change']);
-    return clamped;
-  }
-
-  function buildOverlay(doc, win, ticketTypeOptions, quantityInputEl, payButtonEl, totalPriceEl) {
+  function buildOverlay(doc, win, rows, payButtonEl, totalPriceEl) {
     const root = document.createElement('div');
     root.id = 'kiosk-overlay-root';
 
@@ -124,91 +99,83 @@
     title.textContent = '입장권 발매';
     root.appendChild(title);
 
-    // --- 발매유형 선택 ---
-    const typeSection = document.createElement('div');
-    typeSection.className = 'kiosk-section';
-    const typeLabel = document.createElement('div');
-    typeLabel.className = 'kiosk-section-label';
-    typeLabel.textContent = '발매 유형 선택';
-    typeSection.appendChild(typeLabel);
-
     const typeGrid = document.createElement('div');
     typeGrid.className = 'kiosk-type-grid';
 
-    let selectedButton = null;
-    ticketTypeOptions.forEach((optionEl, idx) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'kiosk-type-btn';
-      btn.textContent = readOptionLabel(doc, optionEl);
-      btn.addEventListener('click', () => {
-        selectRealTicketType(optionEl);
-        if (selectedButton) selectedButton.classList.remove('selected');
-        btn.classList.add('selected');
-        selectedButton = btn;
+    rows.forEach((row) => {
+      const name = row.children[rowCfg.nameColIndex].textContent.trim();
+      const price = row.children[rowCfg.priceColIndex].textContent.trim();
+      const decCell = row.children[rowCfg.decBtnColIndex];
+      const addCell = row.children[rowCfg.addBtnColIndex];
+
+      let qty = 0;
+
+      const card = document.createElement('div');
+      card.className = 'kiosk-type-card';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'kiosk-type-name';
+      nameEl.textContent = name;
+
+      const priceEl = document.createElement('div');
+      priceEl.className = 'kiosk-type-price';
+      priceEl.textContent = price + '원';
+
+      const qtyControl = document.createElement('div');
+      qtyControl.className = 'kiosk-qty-control';
+
+      const minusBtn = document.createElement('button');
+      minusBtn.type = 'button';
+      minusBtn.className = 'kiosk-qty-btn';
+      minusBtn.textContent = '－';
+
+      const qtyDisplay = document.createElement('div');
+      qtyDisplay.className = 'kiosk-qty-display';
+      qtyDisplay.textContent = qty;
+
+      const plusBtn = document.createElement('button');
+      plusBtn.type = 'button';
+      plusBtn.className = 'kiosk-qty-btn';
+      plusBtn.textContent = '＋';
+
+      minusBtn.addEventListener('click', () => {
+        if (qty <= 0) return;
+        dispatchClick(decCell, win);
+        qty -= 1;
+        qtyDisplay.textContent = qty;
       });
-      typeGrid.appendChild(btn);
-      if (idx === 0) {
-        btn.classList.add('selected');
-        selectedButton = btn;
-      }
+
+      plusBtn.addEventListener('click', () => {
+        if (qty >= cfg.selectors.quantityMax) return;
+        dispatchClick(addCell, win);
+        qty += 1;
+        qtyDisplay.textContent = qty;
+      });
+
+      qtyControl.appendChild(minusBtn);
+      qtyControl.appendChild(qtyDisplay);
+      qtyControl.appendChild(plusBtn);
+
+      card.appendChild(nameEl);
+      card.appendChild(priceEl);
+      card.appendChild(qtyControl);
+      typeGrid.appendChild(card);
     });
-    typeSection.appendChild(typeGrid);
-    root.appendChild(typeSection);
 
-    // --- 수량 선택 ---
-    const qtySection = document.createElement('div');
-    qtySection.className = 'kiosk-section';
-    const qtyLabel = document.createElement('div');
-    qtyLabel.className = 'kiosk-section-label';
-    qtyLabel.textContent = '수량 선택';
-    qtySection.appendChild(qtyLabel);
+    root.appendChild(typeGrid);
 
-    const qtyControl = document.createElement('div');
-    qtyControl.className = 'kiosk-qty-control';
-
-    let currentQty = Number(quantityInputEl.value) || sel.quantityMin;
-
-    const minusBtn = document.createElement('button');
-    minusBtn.type = 'button';
-    minusBtn.className = 'kiosk-qty-btn';
-    minusBtn.textContent = '－';
-
-    const qtyDisplay = document.createElement('div');
-    qtyDisplay.className = 'kiosk-qty-display';
-    qtyDisplay.textContent = currentQty;
-
-    const plusBtn = document.createElement('button');
-    plusBtn.type = 'button';
-    plusBtn.className = 'kiosk-qty-btn';
-    plusBtn.textContent = '＋';
-
-    function refreshQty(next) {
-      currentQty = setRealQuantity(win, quantityInputEl, next);
-      qtyDisplay.textContent = currentQty;
+    // --- 총액 표시 ---
+    const priceDisplay = document.createElement('div');
+    priceDisplay.className = 'kiosk-price';
+    function refreshPriceDisplay() {
+      if (!totalPriceEl) return;
+      const amount = totalPriceEl.value !== undefined ? totalPriceEl.value : totalPriceEl.textContent;
+      priceDisplay.textContent = `받을금액: ${amount || 0}원`;
     }
-
-    minusBtn.addEventListener('click', () => refreshQty(currentQty - 1));
-    plusBtn.addEventListener('click', () => refreshQty(currentQty + 1));
-
-    qtyControl.appendChild(minusBtn);
-    qtyControl.appendChild(qtyDisplay);
-    qtyControl.appendChild(plusBtn);
-    qtySection.appendChild(qtyControl);
-    root.appendChild(qtySection);
-
-    // --- 총액 표시(선택) ---
-    let priceObserver = null;
+    refreshPriceDisplay();
+    root.appendChild(priceDisplay);
     if (totalPriceEl) {
-      const priceDisplay = document.createElement('div');
-      priceDisplay.className = 'kiosk-price';
-      priceDisplay.textContent = totalPriceEl.textContent.trim();
-      root.appendChild(priceDisplay);
-
-      priceObserver = new MutationObserver(() => {
-        priceDisplay.textContent = totalPriceEl.textContent.trim();
-      });
-      priceObserver.observe(totalPriceEl, { characterData: true, childList: true, subtree: true });
+      priceInterval = setInterval(refreshPriceDisplay, 500);
     }
 
     // --- 결제 버튼 ---
@@ -219,7 +186,7 @@
     payBtn.addEventListener('click', () => {
       payBtn.disabled = true;
       payBtn.textContent = '카드결제기 진행 중...';
-      payButtonEl.click();
+      dispatchClick(payButtonEl, win);
       setTimeout(() => {
         payBtn.disabled = false;
         payBtn.textContent = '신용카드 결제';
@@ -230,10 +197,6 @@
     document.body.appendChild(root);
     overlayRoot = root;
     setupStaffExit();
-
-    return () => {
-      if (priceObserver) priceObserver.disconnect();
-    };
   }
 
   function setupStaffExit() {
@@ -278,9 +241,9 @@
   }
 
   function teardownOverlay() {
-    if (activeTeardown) {
-      activeTeardown();
-      activeTeardown = null;
+    if (priceInterval) {
+      clearInterval(priceInterval);
+      priceInterval = null;
     }
     if (overlayRoot) {
       overlayRoot.remove();
@@ -309,7 +272,7 @@
     try {
       doc = iframe.contentDocument;
     } catch (e) {
-      return; // 접근 불가(다른 오리진 등) - 발생하면 안 되지만 방어적으로 무시
+      return;
     }
     if (!doc || doc.readyState === 'loading') return;
 
@@ -319,31 +282,13 @@
     currentIframeDoc = doc;
 
     try {
-      const [quantityInputEl, payButtonEl] = await Promise.all([
-        waitForElementIn(doc, sel.quantityInput),
-        waitForElementIn(doc, sel.payButton),
-      ]);
-      const container = await waitForElementIn(doc, sel.ticketTypeContainer);
+      const { rows, payButtonEl } = await waitForTicketUi(doc);
 
-      // 그 사이 탭이 전환되어 버렸다면 중단
-      if (findActiveTicketIframe() !== iframe) return;
-
-      const ticketTypeOptions = Array.from(container.querySelectorAll(sel.ticketTypeOptionSelector));
-      if (ticketTypeOptions.length === 0) {
-        console.error('[키오스크] 발매유형 항목을 찾지 못했습니다. config.js의 선택자를 확인하세요.');
-        return;
-      }
+      if (findActiveTicketIframe() !== iframe) return; // 그 사이 탭 전환됨
 
       const totalPriceEl = sel.totalPriceDisplay ? doc.querySelector(sel.totalPriceDisplay) : null;
 
-      activeTeardown = buildOverlay(
-        doc,
-        iframe.contentWindow,
-        ticketTypeOptions,
-        quantityInputEl,
-        payButtonEl,
-        totalPriceEl
-      );
+      buildOverlay(doc, iframe.contentWindow, rows, payButtonEl, totalPriceEl);
     } catch (err) {
       console.error('[키오스크] 초기화 실패:', err.message);
       console.error('[키오스크] config.js의 selectors 값이 실제 페이지와 일치하는지 확인하세요.');
