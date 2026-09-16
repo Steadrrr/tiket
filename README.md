@@ -203,6 +203,23 @@ Console 탭에 아래와 같은 진단 로그가 함께 출력됩니다.
   찾았을 때만 감시를 켜던 기존 방식으로는 걸리지 않았습니다. 그래서
   이제 이 확장이 주입되는 모든 최상위 창(메인 키오스크 창이든 단말기결제
   팝업창이든)에 무조건 이 감시를 걸어두도록 했습니다.
+
+  이렇게 고친 뒤에도 여전히 안 됐는데, 실제 캡처한 HTML을 보니 확인
+  버튼이 `role="link"`가 아니라 `role="button"`이었습니다:
+  ```html
+  <div class="dhtmlx_modal_box dhtmlx-alert-error" role="dialog">
+    <div class="dhtmlx_popup_title">알림</div>
+    <div class="dhtmlx_popup_text"><span>LRC오류 또는 종료버튼이...</span></div>
+    <div class="dhtmlx_popup_controls">
+      <div role="button" aria-label="확인" class="dhtmlx_ok_button"><div>확인</div></div>
+    </div>
+  </div>
+  ```
+  `findDismissButton()`의 선택자에 `role="link"`만 있고 `role="button"`이
+  빠져 있어서 버튼을 아예 못 찾고 조용히 넘어갔던 것이 진짜 원인이었습니다.
+  이제 `role="button"`과 `aria-label="확인"`도 함께 인식하도록 고쳤고,
+  안내문 메시지도 `.dhtmlx_popup_text`에서 정확히 뽑아오도록 함께
+  수정했습니다.
 - 만약 다른 매표소/기관에서 그리드 컬럼 순서나 "신용카드" 버튼의 onclick
   함수명이 다르게 나온다면, 위와 같은 방식(F12 → 요소 선택 → Elements에서
   `Ctrl+C`로 outerHTML 복사, 또는 Console에서 `$0.outerHTML`)으로 확인해서

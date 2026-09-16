@@ -126,21 +126,30 @@
   }
 
   // 실제로 확인해보니 "LRC오류..." 같은 알림은 브라우저 네이티브 alert()가
-  // 아니라 dhtmlx 자체 팝업(확인 버튼 영역이 <div class="dhtmlx_popup_controls">)
-  // 이었다. 이건 그냥 DOM 요소라서 alert 가로채기로는 막을 수 없고, 대신
+  // 아니라 dhtmlx 자체 팝업이었다. 실제 확인된 구조:
+  //   <div class="dhtmlx_modal_box dhtmlx-alert-error" role="dialog">
+  //     <div class="dhtmlx_popup_title">알림</div>
+  //     <div class="dhtmlx_popup_text"><span>LRC오류 또는 종료버튼이...</span></div>
+  //     <div class="dhtmlx_popup_controls">
+  //       <div tabindex="0" role="button" aria-label="확인" class="dhtmlx_ok_button"><div>확인</div></div>
+  //     </div>
+  //   </div>
+  // 확인 버튼이 role="link"가 아니라 role="button"이었던 것이 처음에 못
+  // 찾았던 원인. 이건 그냥 DOM 요소라서 alert 가로채기로는 막을 수 없고,
   // 이 팝업이 나타나는지 계속 감시하다가 나타나면 "확인" 버튼을 찾아
   // 자동으로 클릭 전달한다.
   function findDismissButton(container) {
     const candidates = Array.from(
       container.querySelectorAll(
-        'button, input[type="button"], input[type="submit"], a, div[role="link"], [onclick]'
+        'button, input[type="button"], input[type="submit"], a, [role="link"], [role="button"], [onclick]'
       )
     );
     if (candidates.length === 0) return null;
     const preferred = candidates.find((el) => {
+      const ariaLabel = (el.getAttribute && el.getAttribute('aria-label')) || '';
       const labelEl = el.querySelector && el.querySelector('.dhxform_btn_txt');
       const text = ((labelEl ? labelEl.textContent : el.textContent) || '').trim();
-      return text === '확인' || text.toUpperCase() === 'OK';
+      return ariaLabel.trim() === '확인' || text === '확인' || text.toUpperCase() === 'OK';
     });
     return preferred || candidates[0];
   }
@@ -156,12 +165,9 @@
         if (!btn) return;
         handled.add(controls);
 
-        // closest()는 자기 자신부터 검사하므로, controls 자신이 아니라
-        // 부모부터 찾아야 버튼 영역이 아닌 전체 팝업(메시지 포함)을 찾는다.
-        const wrapper =
-          (controls.parentElement && controls.parentElement.closest('[class*="dhtmlx_popup"]')) ||
-          controls.parentElement;
-        const message = wrapper ? wrapper.textContent.trim() : '';
+        const modalBox = controls.closest('.dhtmlx_modal_box') || controls.parentElement;
+        const textEl = modalBox && modalBox.querySelector('.dhtmlx_popup_text');
+        const message = (textEl ? textEl.textContent : modalBox ? modalBox.textContent : '').trim();
 
         console.warn('[키오스크] 사이트 알림 팝업 자동 확인:', message);
         showKioskToast(message);
