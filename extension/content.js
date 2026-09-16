@@ -87,6 +87,34 @@
     return style.visibility !== 'hidden' && style.display !== 'none';
   }
 
+  // 카드결제기 취소/타임아웃("LRC오류 또는 종료 버튼이 실행되었습니다" 등)
+  // 처럼 사이트가 window.alert()로 안내하는 경우, 그 네이티브 알림창은
+  // "확인"을 누르기 전까지 페이지 전체 스크립트 실행을 막아버려서
+  // 무인 키오스크에서는 그대로 멈춰버린다. DOM으로는 그 창을 닫을 수
+  // 없으므로, 애초에 alert가 호출되기 전에 iframe의 alert 함수 자체를
+  // 가로채서 "이미 확인을 누른 것"처럼 즉시 반환하게 만든다.
+  function suppressNativeAlerts(win) {
+    try {
+      win.alert = function (message) {
+        console.warn('[키오스크] 사이트 알림(자동으로 확인 처리됨):', message);
+        showKioskToast(String(message == null ? '' : message));
+      };
+    } catch (e) {
+      console.warn('[키오스크] alert 재정의 실패:', e.message);
+    }
+  }
+
+  // 자동으로 넘긴 알림 메시지를 손님이 알아챌 수 있도록 화면 하단에
+  // 잠깐 띄웠다가 자동으로 사라지는 안내문.
+  function showKioskToast(message) {
+    if (!message) return;
+    const toast = document.createElement('div');
+    toast.className = 'kiosk-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+  }
+
   function findActiveTicketIframe() {
     const iframes = Array.from(document.querySelectorAll('iframe'));
     for (const iframe of iframes) {
@@ -597,6 +625,7 @@
     teardownOverlay();
     currentIframeDoc = doc;
     pendingDoc = doc;
+    suppressNativeAlerts(iframe.contentWindow);
 
     try {
       const { rows, payButtonEl } = await waitForTicketUi(doc);

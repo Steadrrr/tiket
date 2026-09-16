@@ -331,3 +331,22 @@
 .kiosk-installment-btn-primary:active {
   background: #24749f;
 }
+
+/* 사이트의 window.alert()를 자동으로 넘길 때, 무슨 일이 있었는지 손님이
+   알아챌 수 있도록 잠깐 보여주는 하단 안내문 */
+.kiosk-toast {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(20px, 4vh, 60px);
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  max-width: 82vw;
+  background: rgba(20, 52, 75, 0.94);
+  color: #ffffff;
+  padding: clamp(14px, 2vh, 22px) clamp(20px, 3vw, 32px);
+  border-radius: 16px;
+  font-size: clamp(15px, 2vh, 22px);
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
