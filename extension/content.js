@@ -164,9 +164,17 @@
     });
   }
 
+  // dhtmlx의 그리드 셀 같은 요소는 단순 click 이벤트만으로도 반응하지만,
+  // "일시불/2개월..." 같은 role="link" 커스텀 버튼은 mousedown/mouseup을
+  // 먼저 받아야 내부 상태가 활성화되는 것으로 보인다(click만 보내면 오버레이
+  // 쪽 선택은 진행되는데 실제 페이지에는 반영되지 않는 문제가 있었음).
+  // 그래서 항상 mousedown → mouseup → click 순서로 전체 시퀀스를 보낸다.
   function dispatchClick(el, win) {
     const MouseEventCtor = win.MouseEvent || MouseEvent;
-    el.dispatchEvent(new MouseEventCtor('click', { bubbles: true, cancelable: true, view: win }));
+    const opts = { bubbles: true, cancelable: true, view: win };
+    el.dispatchEvent(new MouseEventCtor('mousedown', opts));
+    el.dispatchEvent(new MouseEventCtor('mouseup', opts));
+    el.dispatchEvent(new MouseEventCtor('click', opts));
   }
 
   // 할부 선택 팝업(fn_selectMonth)의 버튼은 실제로는 <input>/<button>이
