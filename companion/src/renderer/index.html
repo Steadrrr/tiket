@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data: ws://localhost:5173"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>동반자</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <div id="bubble" class="ui hidden"><div id="bubble-text"></div></div>
+    <div id="status" class="ui hidden"></div>
+
+    <div id="history" class="ui panel hidden"></div>
+
+    <form id="bar" class="ui" autocomplete="off">
+      <button type="button" id="btn-history" title="대화 기록">💬</button>
+      <input id="input" type="text" placeholder="말을 걸어 보세요" maxlength="4000" />
+      <button type="button" id="btn-mic" title="음성 입력 (준비 중)" disabled>🎤</button>
+      <button type="submit" id="btn-send" title="보내기">▶</button>
+      <button type="button" id="btn-stop" title="중단" class="hidden">■</button>
+      <button type="button" id="btn-settings" title="설정">⚙</button>
+    </form>
+
+    <div id="settings" class="ui panel hidden">
+      <h2>설정</h2>
+      <div class="scroll">
+        <fieldset>
+          <legend>AI</legend>
+          <label>Anthropic API 키 <span id="key-state"></span><input id="s-apikey" type="password" placeholder="입력하면 PC에 암호화 저장" /></label>
+          <label>모델
+            <select id="s-model">
+              <option value="claude-haiku-5-5">Haiku 5.5 (저렴, 기본)</option>
+              <option value="claude-sonnet-5-5">Sonnet 5.5</option>
+              <option value="claude-opus-5-5">Opus 5.5</option>
+            </select>
+          </label>
+          <label>생각 깊이(effort)
+            <select id="s-effort"><option value="low">low (빠름, 대화용)</option><option value="medium">medium</option><option value="high">high</option></select>
+          </label>
+          <label>내 이름 <input id="s-user" type="text" /></label>
+          <label>캐릭터 이름 <input id="s-char" type="text" /></label>
+          <label>추가 성격/규칙 <textarea id="s-extra" rows="3" placeholder="예: 반말로 말해줘. 츤데레 말투."></textarea></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>캐릭터</legend>
+          <label>VRM 파일 <div class="row"><input id="s-vrm" type="text" readonly placeholder="(없으면 기본 캐릭터)" /><button type="button" id="pick-vrm">선택</button></div></label>
+          <label>표시할 모니터 <select id="s-display"></select></label>
+          <label class="check"><input id="s-ontop" type="checkbox" /> 항상 위에 표시</label>
+          <label class="check"><input id="s-clickthrough" type="checkbox" /> 클릭 통과 (캐릭터·UI 이외 영역은 뒤 창을 클릭)</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>음성 출력 (TTS)</legend>
+          <label class="check"><input id="s-tts-on" type="checkbox" /> 음성으로 읽기</label>
+          <label>엔진
+            <select id="s-tts-provider"><option value="edge">Edge TTS (무료, 임시)</option><option value="sbv2">Style-Bert-VITS2 (로컬 서버)</option></select>
+          </label>
+          <label>Edge 음성 <input id="s-edge-voice" type="text" /></label>
+          <label>SBV2 서버 주소 <input id="s-sbv2-url" type="text" /></label>
+          <div class="row"><label>모델 ID <input id="s-sbv2-model" type="number" min="0" /></label><label>화자 ID <input id="s-sbv2-speaker" type="number" min="0" /></label><label>언어 <input id="s-sbv2-lang" type="text" /></label></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>컴퓨터 제어 (기본: 끔)</legend>
+          <label>모드
+            <select id="s-control"><option value="off">끔</option><option value="limited">제한 (앱/URL 열기, 매번 확인)</option><option value="full" disabled>전체 제어 (준비 중)</option></select>
+          </label>
+          <label class="check"><input id="s-capture" type="checkbox" /> 화면 보기 허용 (요청 때마다 확인)</label>
+          <label>캡처할 모니터 <select id="s-capture-display"></select></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>기억 / 백업</legend>
+          <label>백업 폴더 <div class="row"><input id="s-backup-dir" type="text" readonly placeholder="예: OneDrive 폴더 안" /><button type="button" id="pick-backup">선택</button></div></label>
+          <label>보관 개수 <input id="s-backup-keep" type="number" min="1" max="365" /></label>
+          <div class="row">
+            <button type="button" id="btn-backup">지금 백업</button>
+            <button type="button" id="btn-restore">백업에서 복원…</button>
+            <button type="button" id="btn-export">장기 기억 내보내기(.md)</button>
+          </div>
+          <div id="memories"></div>
+        </fieldset>
+      </div>
+      <div class="row end">
+        <span id="settings-msg"></span>
+        <button type="button" id="btn-quit">앱 종료</button>
+        <button type="button" id="settings-close">닫기</button>
+        <button type="button" id="settings-save" class="primary">저장</button>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

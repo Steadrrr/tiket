@@ -1,0 +1,26 @@
+{
+  "name": "desktop-companion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VRM 데스크톱 AI 동반자 (Electron + three-vrm + Claude)",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env COMPANION_DEV=1 electron .\"",
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "test": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "@pixiv/three-vrm": "^3.5.5",
+    "msedge-tts": "^2.0.9",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "^44.7.0",
+    "vite": "^8.3.4",
+    "wait-on": "^9.5.1"
+  }
+}
